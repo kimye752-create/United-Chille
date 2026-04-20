@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>싱가포르 1공정 크롤링 보고서</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 32px; color: #222; background: #f8f9fa; }
+  h1 { color: #1a3a6b; }
+  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 20px 0; }
+  .card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 4px #0002; }
+  .card .label { font-size: 0.8em; color: #666; margin-bottom: 4px; }
+  .card .value { font-size: 1.6em; font-weight: bold; }
+  .progress { background: #eee; border-radius: 4px; height: 12px; margin-top: 4px; }
+  .progress-bar { height: 12px; border-radius: 4px; background: #e55; width: 0%; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px #0002; }
+  th { background: #1a3a6b; color: #fff; padding: 10px 12px; text-align: left; font-size: 0.85em; }
+  td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; }
+  tr:hover td { background: #f0f4ff; }
+  .note { color: #888; font-size: 0.8em; margin-top: 20px; }
+</style>
+</head>
+<body>
+<h1>싱가포르 1공정 크롤링 보고서</h1>
+<p style="color:#666">생성: 2026-04-11T11:12:40.896662+00:00 | 헌법 v3 준수</p>
+
+<div class="meta-grid">
+  <div class="card">
+    <div class="label">가격 수집 커버리지</div>
+    <div class="value">0%</div>
+    <div class="progress"><div class="progress-bar"></div></div>
+  </div>
+  <div class="card">
+    <div class="label">수집 완료 / 전체</div>
+    <div class="value">0 / 8</div>
+  </div>
+  <div class="card">
+    <div class="label">평균 Confidence</div>
+    <div class="value">0.666</div>
+  </div>
+  <div class="card">
+    <div class="label">통화</div>
+    <div class="value">SGD</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>브랜드명</th>
+      <th>가격 (SGD)</th>
+      <th>Confidence</th>
+      <th>소스</th>
+      <th>세그먼트</th>
+      <th>INN</th>
+      <th>상태</th>
+      <th>성공 확률</th>
+    </tr>
+  </thead>
+  <tbody>
+    
+        <tr>
+          <td>Hydrine</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.90</td>
+          <td>ndf_api</td>
+          <td>tender</td>
+          <td>hydroxyurea</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>85%</td>
+        </tr>
+        <tr>
+          <td>Gadvoa Inj.</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.85</td>
+          <td>gebiz_crawler</td>
+          <td>tender</td>
+          <td>gadobutrol</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>65%</td>
+        </tr>
+        <tr>
+          <td>Sereterol Activair</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.82</td>
+          <td>hsa_registry_csv</td>
+          <td>retail</td>
+          <td>fluticasone/salmeterol</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>80%</td>
+        </tr>
+        <tr>
+          <td>Omethyl</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.70</td>
+          <td>moh_drug_prices</td>
+          <td>retail</td>
+          <td>omega-3 acid ethyl esters</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>70%</td>
+        </tr>
+        <tr>
+          <td>Rosumeg Combigel</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.68</td>
+          <td>combo_local</td>
+          <td>combo_drug</td>
+          <td>rosuvastatin/omega-3 acid ethyl esters</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>70%</td>
+        </tr>
+        <tr>
+          <td>Atmeg Combigel</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.68</td>
+          <td>combo_local</td>
+          <td>combo_drug</td>
+          <td>atorvastatin/omega-3 acid ethyl esters</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>70%</td>
+        </tr>
+        <tr>
+          <td>Ciloduo</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.35</td>
+          <td>sar_reference</td>
+          <td>wholesale</td>
+          <td>cilostazol/rosuvastatin</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>60%</td>
+        </tr>
+        <tr>
+          <td>Gastiin CR</td>
+          <td><span style='color:#e55'>미수집</span></td>
+          <td>0.35</td>
+          <td>sar_reference</td>
+          <td>wholesale</td>
+          <td>mosapride</td>
+          <td style='color:#fa0'>price_missing</td>
+          <td>55%</td>
+        </tr>
+  </tbody>
+</table>
+
+<p class="note">
+  ※ price_local은 SGD 현지가. fob_estimated_usd는 2공정 FOB 역산 모듈에서 산출됩니다.<br>
+  ※ confidence 1.00 금지 (헌법 명시). IQR 이상치 품목은 [IQR] 표시.
+</p>
+</body>
+</html>

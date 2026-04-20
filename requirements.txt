@@ -1,0 +1,14 @@
+httpx[http2]>=0.27
+beautifulsoup4>=4.12
+pyyaml>=6.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+tenacity>=8.3
+reportlab>=4.0
+supabase>=2.0
+anthropic>=0.28
+yfinance>=0.2.36
+pypdf>=4.0
+# 선택: Playwright 실크롤 시 필요
+# playwright>=1.44  # 설치 후: playwright install chromium

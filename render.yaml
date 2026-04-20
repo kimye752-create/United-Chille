@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: sg-analysis-dashboard
+    runtime: python
+    plan: starter
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt && python scripts/download_fonts.py || echo "[fonts] Font download failed — Korean PDF text may use fallback"
+    startCommand: uvicorn frontend.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: PBS_FETCH
+        value: "1"
+      - key: PLAYWRIGHT_LIVE
+        value: "0"
+      - key: GEBIZ_LIVE
+        value: "0"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: NO_PROXY
+        value: ".supabase.co"

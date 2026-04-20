@@ -1,0 +1,101 @@
+{
+  "csv_path": "/Users/choisinbi/Desktop/1st_logic/datas/ListingofRegisteredTherapeuticProducts.csv",
+  "load_profile": {
+    "total_rows": 5485,
+    "unique_licence_nos": 5485,
+    "duplicate_licence_rows": 0,
+    "empty_licence_rows": 0,
+    "forensic_classification_counts": {
+      "Prescription Only": 4626,
+      "General Sale List": 509,
+      "Pharmacy Only": 350
+    },
+    "top_license_holders": [
+      {
+        "license_holder": "GOLDPLUS UNIVERSAL PTE LTD",
+        "row_count": 284
+      },
+      {
+        "license_holder": "PHARMAFORTE SINGAPORE PTE LTD",
+        "row_count": 187
+      },
+      {
+        "license_holder": "PFIZER PRIVATE LIMITED",
+        "row_count": 170
+      },
+      {
+        "license_holder": "APEX PHARMA MARKETING PTE. LTD.",
+        "row_count": 164
+      },
+      {
+        "license_holder": "NOVARTIS (SINGAPORE) PTE LTD",
+        "row_count": 151
+      },
+      {
+        "license_holder": "TEVA PHARMACEUTICAL INVESTMENTS SINGAPORE PTE. LTD.",
+        "row_count": 143
+      },
+      {
+        "license_holder": "DKSH SINGAPORE PTE. LTD.",
+        "row_count": 138
+      },
+      {
+        "license_holder": "YUNG SHIN PHARMACEUTICAL (SINGAPORE) PTE LTD",
+        "row_count": 124
+      },
+      {
+        "license_holder": "GLAXOSMITHKLINE PTE LTD",
+        "row_count": 120
+      },
+      {
+        "license_holder": "SUNWARD PHARMACEUTICAL PRIVATE LIMITED",
+        "row_count": 119
+      },
+      {
+        "license_holder": "ZYFAS PHARMA PTE LTD",
+        "row_count": 116
+      },
+      {
+        "license_holder": "DCH AURIGA SINGAPORE",
+        "row_count": 115
+      },
+      {
+        "license_holder": "SANDOZ SINGAPORE PTE. LTD.",
+        "row_count": 114
+      },
+      {
+        "license_holder": "BEACONS PHARMACEUTICALS PTE. LTD.",
+        "row_count": 111
+      },
+      {
+        "license_holder": "JOHNSON & JOHNSON INTERNATIONAL (SINGAPORE) PTE LTD",
+        "row_count": 97
+      }
+    ]
+  },
+  "crawl_scenarios_sequential": [
+    {
+      "name": "detail_1x_conservative",
+      "requests_per_row": 1,
+      "delay_seconds_between_requests": 1.0,
+      "estimated_wall_seconds": 5484.0
+    },
+    {
+      "name": "detail_1x_moderate",
+      "requests_per_row": 1,
+      "delay_seconds_between_requests": 0.5,
+      "estimated_wall_seconds": 2742.0
+    },
+    {
+      "name": "detail_2x_conservative",
+      "requests_per_row": 2,
+      "delay_seconds_between_requests": 1.0,
+      "estimated_wall_seconds": 10969.0
+    }
+  ],
+  "notes": [
+    "고유 licence_no 기준이 일반적(중복 행은 정규화 후 1회만 요청 가정).",
+    "실제 크롤 전 robots.txt·이용약관·HSA/정부 사이트 정책 및 PDPA 준수.",
+    "공개 배포 CSV가 있으면 HTTP 스크래핑 대신 공식 다운로드·갱신 주기를 우선 검토."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(start notepad *)",
+      "Bash(python -m uvicorn frontend.server:app --host 127.0.0.1 --port 8765)",
+      "Bash(curl -s http://127.0.0.1:8765/api/settings/keys/status)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -I{} taskkill /PID {} /F)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

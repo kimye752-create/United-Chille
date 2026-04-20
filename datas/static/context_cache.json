@@ -1,0 +1,454 @@
+{
+  "SG_hydrine_hydroxyurea_500": {
+    "product_id": "SG_hydrine_hydroxyurea_500",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN11083P",
+        "product_name": "HYDRINE CAPSULES 500 mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "L01XX05",
+        "active_ingredients": "HYDROXYUREA"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 1,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 1건 확인.  처방전 필요(Rx): 1건, 일반(OTC): 0건.  대표 사례: HYDRINE CAPSULES 500 mg (SIN11083P, Prescription Only)  최초 승인일: 1999-08-25",
+    "gebiz_tenders": [
+      {
+        "tender_no": "HSA000ETT22000010",
+        "tender_description": "SUPPLY AND DELIVERY OF CONTROL SERUM FOR HLA CROSSMATCH BY COMPLEMENT DEPENDENT CYTOTOXICITY METHOD",
+        "agency": "Health Sciences Authority",
+        "award_date": "20/9/2022",
+        "supplier_name": "BIOMED DIAGNOSTICS PTE LTD",
+        "awarded_amt_sgd": "113240.0"
+      },
+      {
+        "tender_no": "HSA000ETT22000010",
+        "tender_description": "SUPPLY AND DELIVERY OF CONTROL SERUM FOR HLA CROSSMATCH BY COMPLEMENT DEPENDENT CYTOTOXICITY METHOD",
+        "agency": "Health Sciences Authority",
+        "award_date": "20/9/2022",
+        "supplier_name": "SIGMA-ALDRICH PTE. LTD.",
+        "awarded_amt_sgd": "1428.0"
+      },
+      {
+        "tender_no": "NST000ETT22000147",
+        "tender_description": "Invitation to Tender: Supply, Delivery, Installation, Testing and Commissioning of One (1) Unit of A",
+        "agency": "Agency for Science, Technology and Research",
+        "award_date": "20/2/2023",
+        "supplier_name": "SYSMEX ASIA PACIFIC PTE. LTD.",
+        "awarded_amt_sgd": "120000.0"
+      }
+    ],
+    "gebiz_total_awarded_sgd": 234668.0,
+    "gebiz_agencies": [
+      "Health Sciences Authority",
+      "Agency for Science, Technology and Research"
+    ],
+    "gebiz_summary": "GeBIZ 낙찰 3건 확인. 총 낙찰액: S$234,668. 주요 발주기관: Health Sciences Authority, Agency for Science, Technology and Research. 최근 낙찰: 20/9/2022 (SUPPLY AND DELIVERY OF CONTROL SERUM FOR HLA CROSSMATCH BY C)",
+    "built_at": "2026-04-12T12:47:06.265434+00:00"
+  },
+  "SG_gadvoa_gadobutrol_604": {
+    "product_id": "SG_gadvoa_gadobutrol_604",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN13807P",
+        "product_name": "GADOVIST 1MMOL/ML PREFILLED SYRINGE 5.0 ML",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "V08CA09",
+        "active_ingredients": "GADOBUTROL"
+      },
+      {
+        "licence_no": "SIN12399P",
+        "product_name": "GADOVIST INJECTION 1.0 mmol/ml",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "V08CA09",
+        "active_ingredients": "GADOBUTROL"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 2,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 2건 확인.  처방전 필요(Rx): 2건, 일반(OTC): 0건.  대표 사례: GADOVIST 1MMOL/ML PREFILLED SYRINGE 5.0 ML (SIN13807P, Prescription Only)  최초 승인일: 2010-05-21",
+    "gebiz_tenders": [],
+    "gebiz_total_awarded_sgd": 0,
+    "gebiz_agencies": [],
+    "gebiz_summary": "GeBIZ 조달 이력 없음 — 해당 성분 공공조달 선례 미확인",
+    "built_at": "2026-04-12T12:47:06.293272+00:00"
+  },
+  "SG_sereterol_activair": {
+    "product_id": "SG_sereterol_activair",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN13983P",
+        "product_name": "APO-FLUTICASONE AQUEOUS NASAL SPRAY 50MCG/SPRAY",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R01AD08",
+        "active_ingredients": "FLUTICASONE PROPIONATE (micronized)"
+      },
+      {
+        "licence_no": "SIN11529P",
+        "product_name": "SERETIDE EVOHALER 25/50 mcg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03AK06",
+        "active_ingredients": "FLUTICASONE PROPIONATE&&SALMETEROL"
+      },
+      {
+        "licence_no": "SIN11530P",
+        "product_name": "SERETIDE EVOHALER 25/125 mcg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03AK06",
+        "active_ingredients": "FLUTICASONE PROPIONATE&&SALMETEROL"
+      },
+      {
+        "licence_no": "SIN11531P",
+        "product_name": "SERETIDE EVOHALER 25/250 mcg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03AK06",
+        "active_ingredients": "FLUTICASONE PROPIONATE&&SALMETEROL"
+      },
+      {
+        "licence_no": "SIN11347P",
+        "product_name": "FLIXOTIDE EVOHALER 125 mcg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03BA05",
+        "active_ingredients": "FLUTICASONE PROPIONATE"
+      },
+      {
+        "licence_no": "SIN08628P",
+        "product_name": "CUTIVATE CREAM 0.05% w/w",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "D07AC17",
+        "active_ingredients": "FLUTICASONE PROPIONATE"
+      },
+      {
+        "licence_no": "SIN11358P",
+        "product_name": "FLIXOTIDE EVOHALER 50 mcg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03BA05",
+        "active_ingredients": "FLUTICASONE PROPIONATE"
+      },
+      {
+        "licence_no": "SIN07090P",
+        "product_name": "FLIXONASE AQUEOUS NASAL SPRAY 0.05% w/w",
+        "forensic_classification": "Pharmacy Only",
+        "atc_code": "R01AD08",
+        "active_ingredients": "FLUTICASONE PROPIONATE"
+      },
+      {
+        "licence_no": "SIN16909P",
+        "product_name": "SALFLUMIX EASYHALER INHALATION POWDER 50µG/250µG/DOSE",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R03AK06",
+        "active_ingredients": "Fluticasone propionate&&Salmeterol xinafoate eqv Salmeterol"
+      },
+      {
+        "licence_no": "SIN15256P",
+        "product_name": "SYNAZE NASAL SPRAY",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "R01AD58",
+        "active_ingredients": "Azelastine hydrochloride&&Fluticasone propionate"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 23,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 23건 확인.  처방전 필요(Rx): 22건, 일반(OTC): 1건.  대표 사례: APO-FLUTICASONE AQUEOUS NASAL SPRAY 50MCG/SPRAY (SIN13983P, Prescription Only)  최초 승인일: 2011-07-05",
+    "gebiz_tenders": [
+      {
+        "tender_no": "NPO000ETT23000016",
+        "tender_description": "(Tender Ref: FY23/HS/004/ITT) Tender for supply and delivery of venipuncture arms, respiratory equip",
+        "agency": "Ngee Ann Polytechnic",
+        "award_date": "30/10/2023",
+        "supplier_name": "ACRE ENGINEERING PTE LTD",
+        "awarded_amt_sgd": "298620.0"
+      },
+      {
+        "tender_no": "NPO000ETT23000016",
+        "tender_description": "(Tender Ref: FY23/HS/004/ITT) Tender for supply and delivery of venipuncture arms, respiratory equip",
+        "agency": "Ngee Ann Polytechnic",
+        "award_date": "30/10/2023",
+        "supplier_name": "IDS MEDICAL SYSTEMS (SINGAPORE) PTE. LTD.",
+        "awarded_amt_sgd": "10440.0"
+      },
+      {
+        "tender_no": "NPO000ETT23000016",
+        "tender_description": "(Tender Ref: FY23/HS/004/ITT) Tender for supply and delivery of venipuncture arms, respiratory equip",
+        "agency": "Ngee Ann Polytechnic",
+        "award_date": "30/10/2023",
+        "supplier_name": "YEAP MEDICAL SUPPLIES PTE. LTD.",
+        "awarded_amt_sgd": "6580.0"
+      }
+    ],
+    "gebiz_total_awarded_sgd": 315640.0,
+    "gebiz_agencies": [
+      "Ngee Ann Polytechnic"
+    ],
+    "gebiz_summary": "GeBIZ 낙찰 3건 확인. 총 낙찰액: S$315,640. 주요 발주기관: Ngee Ann Polytechnic. 최근 낙찰: 30/10/2023 ((Tender Ref: FY23/HS/004/ITT) Tender for supply and delivery)",
+    "built_at": "2026-04-12T12:47:06.325388+00:00"
+  },
+  "SG_omethyl_omega3_2g": {
+    "product_id": "SG_omethyl_omega3_2g",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN14504P",
+        "product_name": "Omacor Soft Capsule 1000mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AX06",
+        "active_ingredients": "Omega-3-acid ethyl esters 90 (containing: Eicosapent (EPA) 460mg and doconexent (DHA) 380mg ethyl esters and α-tocophero"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 1,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 1건 확인.  처방전 필요(Rx): 1건, 일반(OTC): 0건.  대표 사례: Omacor Soft Capsule 1000mg (SIN14504P, Prescription Only)  최초 승인일: 2014-02-11",
+    "gebiz_tenders": [
+      {
+        "tender_no": "HSA000ETT22000028",
+        "tender_description": "SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTRIDGES FOR A PERIOD OF 2 YEARS WITH AN OP",
+        "agency": "Health Sciences Authority",
+        "award_date": "30/9/2022",
+        "supplier_name": "AGILENT TECHNOLOGIES SINGAPORE (SALES) PTE. LTD.",
+        "awarded_amt_sgd": "217500.0"
+      }
+    ],
+    "gebiz_total_awarded_sgd": 217500.0,
+    "gebiz_agencies": [
+      "Health Sciences Authority"
+    ],
+    "gebiz_summary": "GeBIZ 낙찰 1건 확인. 총 낙찰액: S$217,500. 주요 발주기관: Health Sciences Authority. 최근 낙찰: 30/9/2022 (SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTR)",
+    "built_at": "2026-04-12T12:47:06.349612+00:00"
+  },
+  "SG_rosumeg_combigel": {
+    "product_id": "SG_rosumeg_combigel",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN15595P",
+        "product_name": "ROVAST FILM COATED TABLET 10 MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium 10.42mg eqv Rosuvastatin"
+      },
+      {
+        "licence_no": "SIN15690P",
+        "product_name": "CHOLOSTAR FILM COATED TABLET 10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium 10.4mg eqv Rosuvastatin"
+      },
+      {
+        "licence_no": "SIN15636P",
+        "product_name": "ROVAS-20 FILM-COATED TABLET 20MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin calcium 20.8mg eqv rosuvastatin"
+      },
+      {
+        "licence_no": "SIN16550P",
+        "product_name": "ROZAT 10 FILM COATED TABLET 10 MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "ROSUVASTATIN CALCIUM EQV ROSUVASTATIN"
+      },
+      {
+        "licence_no": "SIN15635P",
+        "product_name": "ROVAS-10 FILM-COATED TABLET 10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin calcium 10.4mg eqv rosuvastatin"
+      },
+      {
+        "licence_no": "SIN16549P",
+        "product_name": "ROZAT 20 FILM COATED TABLET 20 MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "ROSUVASTATIN CALCIUM EQV ROSUVASTATIN"
+      },
+      {
+        "licence_no": "SIN16380P",
+        "product_name": "ROSTAT FILM COATED TABLET 20MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium eqv Rosuvastatin"
+      },
+      {
+        "licence_no": "SIN16382P",
+        "product_name": "ROSTAT FILM COATED TABLET 5MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium eqv Rosuvastatin"
+      },
+      {
+        "licence_no": "SIN16381P",
+        "product_name": "ROSTAT FILM COATED TABLET 10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium eqv Rosuvastatin"
+      },
+      {
+        "licence_no": "SIN16759P",
+        "product_name": "BEACRESTIN FILM COATED TABLET 10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA07",
+        "active_ingredients": "Rosuvastatin Calcium eqv Rosuvastatin"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 55,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 55건 확인.  처방전 필요(Rx): 55건, 일반(OTC): 0건.  대표 사례: ROVAST FILM COATED TABLET 10 MG (SIN15595P, Prescription Only)  최초 승인일: 2018-12-13",
+    "gebiz_tenders": [
+      {
+        "tender_no": "HSA000ETT22000028",
+        "tender_description": "SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTRIDGES FOR A PERIOD OF 2 YEARS WITH AN OP",
+        "agency": "Health Sciences Authority",
+        "award_date": "30/9/2022",
+        "supplier_name": "AGILENT TECHNOLOGIES SINGAPORE (SALES) PTE. LTD.",
+        "awarded_amt_sgd": "217500.0"
+      }
+    ],
+    "gebiz_total_awarded_sgd": 217500.0,
+    "gebiz_agencies": [
+      "Health Sciences Authority"
+    ],
+    "gebiz_summary": "GeBIZ 낙찰 1건 확인. 총 낙찰액: S$217,500. 주요 발주기관: Health Sciences Authority. 최근 낙찰: 30/9/2022 (SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTR)",
+    "built_at": "2026-04-12T12:47:06.372121+00:00"
+  },
+  "SG_atmeg_combigel": {
+    "product_id": "SG_atmeg_combigel",
+    "hsa_matches": [
+      {
+        "licence_no": "SIN16490P",
+        "product_name": "DUALPRESS FILM-COATED TABLET 5MG/10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10BX03",
+        "active_ingredients": "Amlodipine besylate eqv Amlodipine&&Atorvastatin calcium trihydrate eqv Atorvastatin"
+      },
+      {
+        "licence_no": "SIN14216P",
+        "product_name": "ATORIS film-coated Tablet 10mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA05",
+        "active_ingredients": "Atorvastatin Calcium 10.36mg eqv. Atorvastatin"
+      },
+      {
+        "licence_no": "SIN14217P",
+        "product_name": "ATORIS film-coated Tablet 20mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA05",
+        "active_ingredients": "Atorvastatin Calcium 20.72mg eqv. Atorvastatin"
+      },
+      {
+        "licence_no": "SIN15795P",
+        "product_name": "ATOCOR 10 FILM COATED TABLET 10MG",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA05",
+        "active_ingredients": "Atorvastatin Calcium 10.34mg eqv Atorvastatin"
+      },
+      {
+        "licence_no": "SIN14312P",
+        "product_name": "Atorvon film-coated tablets 10mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA05",
+        "active_ingredients": "Atorvastatin calcium 10.34mg eq. to Atorvastatin"
+      },
+      {
+        "licence_no": "SIN14313P",
+        "product_name": "Atorvon film-coated tablets 20mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10AA05",
+        "active_ingredients": "Atorvastatin calcium 20.68mg eq. to Atorvastatin"
+      },
+      {
+        "licence_no": "SIN15430P",
+        "product_name": "TRIVERAM FILM-COATED TABLET 40 mg/10 mg/10 mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10BX11",
+        "active_ingredients": "Amlodipine besilate 13.87 mg eqv amlodipine&&Atorvastatin calcium trihydrate 43.28 mg eqv atorvastatin&&Perindopril 6.79"
+      },
+      {
+        "licence_no": "SIN15429P",
+        "product_name": "TRIVERAM FILM-COATED TABLET 20 mg/10 mg/10 mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10BX11",
+        "active_ingredients": "Amlodipine besilate 13.87 mg eqv amlodipine&&Atorvastatin calcium trihydrate 21.64 mg eqv atorvastatin&&Perindopril 6.79"
+      },
+      {
+        "licence_no": "SIN15428P",
+        "product_name": "TRIVERAM FILM-COATED TABLET 20 mg/10 mg/5 mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10BX11",
+        "active_ingredients": "Amlodipine besilate 6.935 mg eqv amlodipine&&Atorvastatin calcium trihydrate 21.64 mg eqv atorvastatin&&Perindopril 6.79"
+      },
+      {
+        "licence_no": "SIN15427P",
+        "product_name": "TRIVERAM FILM-COATED TABLET 20 mg/5 mg/5 mg",
+        "forensic_classification": "Prescription Only",
+        "atc_code": "C10BX11",
+        "active_ingredients": "Amlodipine besilate 6.935 mg eqv amlodipine&&Atorvastatin calcium trihydrate 21.64 mg eqv atorvastatin&&Perindopril 3.39"
+      }
+    ],
+    "hsa_registered": true,
+    "competitor_count": 54,
+    "prescription_only": true,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 경쟁품 54건 확인.  처방전 필요(Rx): 54건, 일반(OTC): 0건.  대표 사례: DUALPRESS FILM-COATED TABLET 5MG/10MG (SIN16490P, Prescription Only)  최초 승인일: 2022-05-11",
+    "gebiz_tenders": [
+      {
+        "tender_no": "HSA000ETT22000028",
+        "tender_description": "SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTRIDGES FOR A PERIOD OF 2 YEARS WITH AN OP",
+        "agency": "Health Sciences Authority",
+        "award_date": "30/9/2022",
+        "supplier_name": "AGILENT TECHNOLOGIES SINGAPORE (SALES) PTE. LTD.",
+        "awarded_amt_sgd": "217500.0"
+      }
+    ],
+    "gebiz_total_awarded_sgd": 217500.0,
+    "gebiz_agencies": [
+      "Health Sciences Authority"
+    ],
+    "gebiz_summary": "GeBIZ 낙찰 1건 확인. 총 낙찰액: S$217,500. 주요 발주기관: Health Sciences Authority. 최근 낙찰: 30/9/2022 (SUPPLY AND DELIVERY OF DISPOSABLE PHOSPHOLIPID REMOVAL CARTR)",
+    "built_at": "2026-04-12T12:47:06.395481+00:00"
+  },
+  "SG_ciloduo_cilosta_rosuva": {
+    "product_id": "SG_ciloduo_cilosta_rosuva",
+    "hsa_matches": [],
+    "hsa_registered": false,
+    "competitor_count": 0,
+    "prescription_only": false,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 기록 없음 — 신규 등록 필요",
+    "gebiz_tenders": [],
+    "gebiz_total_awarded_sgd": 0,
+    "gebiz_agencies": [],
+    "gebiz_summary": "GeBIZ 조달 이력 없음 — 해당 성분 공공조달 선례 미확인",
+    "built_at": "2026-04-12T12:47:06.417249+00:00"
+  },
+  "SG_gastiin_cr_mosapride": {
+    "product_id": "SG_gastiin_cr_mosapride",
+    "hsa_matches": [],
+    "hsa_registered": false,
+    "competitor_count": 0,
+    "prescription_only": false,
+    "pdf_snippets": [],
+    "brochure_snippets": [],
+    "regulatory_summary": "HSA 등재 기록 없음 — 신규 등록 필요",
+    "gebiz_tenders": [],
+    "gebiz_total_awarded_sgd": 0,
+    "gebiz_agencies": [],
+    "gebiz_summary": "GeBIZ 조달 이력 없음 — 해당 성분 공공조달 선례 미확인",
+    "built_at": "2026-04-12T12:47:06.443983+00:00"
+  }
+}

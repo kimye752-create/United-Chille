@@ -1,0 +1,66 @@
+# 우루과이(UY) 1공정 — 헌법 v3 기준 소스 메타
+country: "UY"
+currency: "UYU"
+
+sources:
+  sice_public:
+    tier: 1
+    url_seed: "https://comprasestatales.gub.uy/consultas/buscar"
+    access_method: playwright
+    rate_limit_qps: 0.5
+    cron_slot: "0 23 * * 1"
+    note: "ARCE 국가조달시스템 — Adjudicaciones(낙찰 완료) 건만 필터, ASSE(organismo=29) 타깃"
+
+  farmashop_retail:
+    tier: 1
+    url_seed: "https://tienda.farmashop.com.uy"
+    access_method: playwright
+    rate_limit_qps: 0.3
+    cron_slot: "5 23 * * *"
+    note: "우루과이 최대 약국 체인 — Farmacard 할인가/일반 정가 DOM 분리 수집 필수"
+
+  farmauy_retail:
+    tier: 2
+    url_seed: "https://farma.uy"
+    access_method: html_static
+    rate_limit_qps: 1.0
+    cron_slot: "10 23 * * *"
+    note: "쿼리 스트링 INN 타기팅 가능 (?q=cilostazol) — 재고 상태까지 파싱"
+
+  sanroque_retail:
+    tier: 2
+    url_seed: "https://sanroque.com.uy"
+    access_method: html_static
+    rate_limit_qps: 0.5
+    cron_slot: "15 23 * * *"
+    note: "H&B 대형 체인 — 카테고리 ID 직접 엔드포인트 타기팅 (스파이더링 금지)"
+
+  rex_retail:
+    tier: 2
+    url_seed: "https://farmaciarex.uy"
+    access_method: html_static
+    rate_limit_qps: 1.0
+    cron_slot: "20 23 * * *"
+    note: "독립 약국 체인 — 정적 HTML 구조, httpx+BS4 경량 수집"
+
+  orpm_benchmark:
+    tier: 3
+    url_seed: "https://ricg.org/es/novedades/conozca-el-observatorio-regional-de-precios-de-medicamentos-orpm-unops/"
+    access_method: html_static
+    rate_limit_qps: 0.2
+    cron_slot: "0 1 * * 1"
+    note: "UNOPS 중남미 18개국 약가 관측소 — ±30% 이상 이상치 탐지 벤치마크"
+
+  msp_copayment:
+    tier: 3
+    url_seed: "https://www.gub.uy/ministerio-salud-publica/politica-y-gestion/sistema-nacional-integrado-salud/regulacion-de-precios"
+    access_method: html_static
+    rate_limit_qps: 0.2
+    cron_slot: "0 2 * * 1"
+    note: "MSP 코페이먼트 상한선 (2025.01 기준 $880 UYU+IVA) — FOB 역산 제약 조건"
+
+  basic_files:
+    tier: 2
+    access_method: local_pdf
+    path: "datas/basic_files/"
+    note: "제품 브로슈어 — 임상 근거 및 제품 규격"

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>칠레 약가 수집 · 파트너 매칭 — UPharma Export AI</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="/static/style.css?v=5"/>
+</head>
+<body>
+<div class="app">
+
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/images/logo.png" class="brand-logo" alt="한국유나이티드제약 로고">
+    <div class="brand-text">
+      <h1>한국유나이티드제약(주) 해외 영업·마케팅 대시보드</h1>
+    </div>
+  </div>
+  <div class="topbar-r">
+    <div class="pill">
+      <span class="flag-emoji">🇨🇱</span>
+      <span>Chile</span>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <nav class="nav">
+    <a class="tab on" onclick="goTab('main',this)">메인 프리뷰</a>
+    <a class="tab"    onclick="goTab('ahp',this)">인도네시아 파트너</a>
+    <a class="tab"    onclick="goTab('rep',this)">보고서</a>
+  </nav>
+
+  <!-- ════ 메인 프리뷰 ════ -->
+  <div id="main" class="page on">
+
+    <!-- SECTION A: 거시적 지표 4카드 -->
+    <div class="macro-grid">
+      <div class="macro-card">
+        <div class="macro-label">1인당 GDP</div>
+        <div class="macro-value" id="macro-gdp">—</div>
+        <div class="macro-source" id="macro-gdp-src">—</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">인구</div>
+        <div class="macro-value" id="macro-pop">—</div>
+        <div class="macro-source" id="macro-pop-src">—</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">의약품 시장 규모</div>
+        <div class="macro-value" id="macro-pharma">—</div>
+        <div class="macro-source" id="macro-pharma-src">—</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">실질 성장률</div>
+        <div class="macro-value" id="macro-growth">—</div>
+        <div class="macro-source" id="macro-growth-src">—</div>
+      </div>
+    </div>
+
+    <!-- SECTION B: Leaflet 지도 + 뉴스 -->
+    <div class="map-news-grid">
+
+      <article class="card map-card-wrap">
+        <div class="sec" style="margin-bottom:10px;">
+          <h3>칠레 위치</h3>
+        </div>
+        <div id="cl-map" class="sg-leaflet-map"></div>
+      </article>
+
+      <article class="card">
+        <div class="sec">
+          <h3>칠레 의약품 시장 주요 동향</h3>
+          <button class="btn-refresh" id="btn-news-refresh" onclick="loadNews()" style="margin-top:0;">↺</button>
+        </div>
+        <div id="news-list">
+          <div class="irow" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">뉴스 로드 중…</div>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- ════ 공정 섹션 ════ -->
+
+    <!-- 시장조사 -->
+    <div class="process-section">
+      <div class="process-header" onclick="toggleProcess('p1')">
+        <div class="process-header-l">
+          <span class="process-num">01</span>
+          <div>
+            <div class="process-title">시장조사</div>
+            <div class="process-sub">제품 분석 · Claude AI · PDF 보고서 자동 생성</div>
+          </div>
+        </div>
+        <span class="process-arrow" id="pa-p1">▾</span>
+      </div>
+      <div class="process-body" id="pb-p1">
+
+        <div class="selector-card">
+          <div class="selector-label">품목 선택</div>
+          <div class="selector-row">
+            <select id="product-select">
+              <option value="CL_cilostazol_cr_200">[개량신약] Cilostazol CR · cilostazol 200mg SR (1일 1회)</option>
+              <option value="CL_ciloduo_cilosta_rosuva">[개량신약] Ciloduo · cilostazol SR + rosuvastatin 복합제</option>
+              <option value="CL_rosumeg_combigel">[개량신약] Rosumeg Combigel · rosuvastatin+omega-3</option>
+              <option value="CL_atmeg_combigel">[개량신약] Atmeg Combigel · atorvastatin+omega-3</option>
+              <option value="CL_gastiin_cr_mosapride">[개량신약] Gastiin CR · mosapride citrate 15mg SR</option>
+              <option value="CL_omethyl_omega3_2g">[개량신약] Omethyl Cutielet · omega-3 ethyl esters 2g</option>
+            </select>
+            <button class="btn-analyze" id="btn-analyze" onclick="runPipeline()">
+              <span id="btn-icon">▶</span> 분석 실행
+            </button>
+          </div>
+          <div class="progress-row" id="progress-row">
+            <div class="prog-step" id="prog-db_load"><div class="prog-dot">1</div><div class="prog-label">DB 조회</div></div>
+            <div class="prog-step" id="prog-analyze"><div class="prog-dot">2</div><div class="prog-label">Claude 분석</div></div>
+            <div class="prog-step" id="prog-refs"><div class="prog-dot">3</div><div class="prog-label">논문 검색</div></div>
+            <div class="prog-step" id="prog-report"><div class="prog-dot">4</div><div class="prog-label">PDF 생성</div></div>
+          </div>
+          <div class="p1-result-note" id="p1-result-note" style="display:none;"></div>
+        </div>
+
+        <div class="selector-card">
+          <div class="selector-label">신약 직접 분석</div>
+          <div class="custom-form">
+            <input type="text" id="custom-trade-name" class="custom-input" placeholder="약품명 (예: Nexavar)">
+            <input type="text" id="custom-inn"        class="custom-input" placeholder="성분명 (예: sorafenib)">
+            <input type="text" id="custom-dosage"     class="custom-input" placeholder="제형 (예: 200mg tablet)">
+            <button class="btn-analyze" id="btn-custom" onclick="runCustomPipeline()">
+              <span id="custom-icon">▶</span> 신약 분석
+            </button>
+          </div>
+          <div class="progress-row" id="custom-progress-row">
+            <div class="prog-step" id="cprog-analyze"><div class="prog-dot">1</div><div class="prog-label">Claude 분석</div></div>
+            <div class="prog-step" id="cprog-refs"><div class="prog-dot">2</div><div class="prog-label">논문 검색</div></div>
+            <div class="prog-step" id="cprog-report"><div class="prog-dot">3</div><div class="prog-label">PDF 생성</div></div>
+          </div>
+        </div>
+
+        <div class="report-card" id="report-card">
+          <div class="card-title"><div class="card-title-dot"></div> PDF 보고서</div>
+          <div id="report-state-loading" style="display:none;align-items:center;gap:8px;">
+            <span class="report-loading-spinner"></span>
+            <span style="font-size:12px;color:var(--muted)">PDF 생성 중…</span>
+          </div>
+          <div id="report-state-ok" style="display:none">
+            <a class="btn-download" href="/api/report/download" target="_blank">📄 PDF 보고서 다운로드</a>
+          </div>
+          <div id="report-state-error" style="display:none">
+            <p class="report-state" style="color:var(--red)">PDF 생성 실패.</p>
+          </div>
+        </div>
+
+        <div style="display:none;" aria-hidden="true">
+          <div class="result-card" id="result-card">
+            <div id="verdict-name"></div><div id="verdict-inn"></div>
+            <div id="verdict-badge" class="verdict-badge v-none"></div>
+            <div class="traffic-light">
+              <div class="tl-lamp tl-red"    id="tl-red"></div>
+              <div class="tl-lamp tl-yellow" id="tl-yellow"></div>
+              <div class="tl-lamp tl-green"  id="tl-green"></div>
+            </div>
+            <div id="basis-market-medical"></div><div id="basis-regulatory"></div>
+            <div id="basis-trade"></div><div id="basis-pbs-line"></div>
+            <div id="entry-pathway"></div><div id="price-positioning-pbs"></div>
+            <div id="risks-conditions"></div>
+            <button id="btn-reanalyze"></button>
+          </div>
+          <div class="papers-card" id="papers-card"><div id="papers-list"></div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 수출 가격 전략 -->
+    <div class="process-section">
+      <div class="process-header" onclick="toggleProcess('p2')">
+        <div class="process-header-l">
+          <span class="process-num">02</span>
+          <div>
+            <div class="process-title">수출가격 전략</div>
+            <div class="process-sub">AI 가격 분석 · 3가지 시나리오 · 커스텀 옵션 · PDF 보고서</div>
+          </div>
+        </div>
+        <span class="process-arrow" id="pa-p2">▾</span>
+      </div>
+      <div class="process-body" id="pb-p2">
+        <div id="p2-wrap">
+
+          <div class="selector-card">
+            <div class="selector-label">분석 보고서 선택</div>
+            <div class="selector-row">
+              <select id="p2-ai-report-select" style="flex:1;">
+                <option value="">저장된 분석 보고서를 선택하세요.</option>
+              </select>
+            </div>
+            <div class="selector-label" style="margin-top:12px;">시장 선택 및 분석 실행</div>
+            <div class="selector-row" style="flex-wrap:wrap;gap:10px;">
+              <div class="p2-seg-row" style="margin-bottom:0;flex:1;min-width:180px;">
+                <button class="p2-seg-btn on" id="p2-ai-seg-public"  type="button" onclick="setP2AiSeg('public')">공공 시장</button>
+                <button class="p2-seg-btn"    id="p2-ai-seg-private" type="button" onclick="setP2AiSeg('private')">민간 시장</button>
+              </div>
+              <button class="btn-analyze" id="btn-p2-ai-run" type="button" onclick="runP2AiPipeline()">
+                <span id="p2-ai-run-icon">▶</span> AI 가격 분석 실행
+              </button>
+            </div>
+            <div id="p2-ai-seg-desc" class="p2-note" style="margin-top:5px;"></div>
+            <div class="progress-row" id="p2-progress-row">
+              <div class="prog-step" id="p2prog-extract"><div class="prog-dot">1</div><div class="prog-label">PDF 추출</div></div>
+              <div class="prog-step" id="p2prog-ai_extract"><div class="prog-dot">2</div><div class="prog-label">가격 추출</div></div>
+              <div class="prog-step" id="p2prog-ai_analysis"><div class="prog-dot">3</div><div class="prog-label">AI 분석</div></div>
+              <div class="prog-step" id="p2prog-report"><div class="prog-dot">4</div><div class="prog-label">보고서 생성</div></div>
+            </div>
+            <div id="p2-ai-error-msg" class="p2-note" style="display:none;color:var(--red);"></div>
+          </div>
+
+          <!-- 3열 시나리오 결과 -->
+          <div id="p2-ai-result-section" style="display:none;">
+            <div class="p2-three-col">
+
+              <!-- 공격적 (1위) -->
+              <div class="p2-col p2-col--agg">
+                <div class="p2-col-rank-row">
+                  <span class="p2-col-label">공격적 (1위)</span>
+                  <span class="p2-rank-badge">RANK 1</span>
+                </div>
+                <div class="p2-col-price" id="p2c-price-agg">—</div>
+                <div class="p2-col-currency">SGD</div>
+                <div class="p2-col-sub" id="p2c-sub-agg">— USD · — KRW</div>
+                <div class="p2-col-expand-row">
+                  <button class="p2-col-expand-btn" onclick="toggleP2ColDetail('agg')">▸ 역산 · 옵션 편집</button>
+                </div>
+                <div class="p2-col-detail" id="p2cd-agg" style="display:none;">
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">기준가 (SGD)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-base-agg" value="0" step="0.1" min="0" oninput="recalcP2Col('agg')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">에이전트 수수료(%)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-fee-agg" value="3.0" step="0.5" min="0" max="50" oninput="recalcP2Col('agg')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">운임 배수</label>
+                    <input class="p2-col-input" type="number" id="p2ci-freight-agg" value="0.85" step="0.05" min="0.1" max="5" oninput="recalcP2Col('agg')">
+                  </div>
+                  <div id="p2co-agg" class="p2-custom-opts"></div>
+                  <button class="p2c-add-btn" onclick="addP2ColOption('agg')">+ 옵션 추가</button>
+                </div>
+              </div>
+
+              <!-- 평균 (2위) -->
+              <div class="p2-col p2-col--avg">
+                <div class="p2-col-rank-row">
+                  <span class="p2-col-label">평균 (2위)</span>
+                  <span class="p2-rank-badge">RANK 2</span>
+                </div>
+                <div class="p2-col-price" id="p2c-price-avg">—</div>
+                <div class="p2-col-currency">SGD</div>
+                <div class="p2-col-sub" id="p2c-sub-avg">— USD · — KRW</div>
+                <div class="p2-col-expand-row">
+                  <button class="p2-col-expand-btn" onclick="toggleP2ColDetail('avg')">▸ 역산 · 옵션 편집</button>
+                </div>
+                <div class="p2-col-detail" id="p2cd-avg" style="display:none;">
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">기준가 (SGD)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-base-avg" value="0" step="0.1" min="0" oninput="recalcP2Col('avg')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">에이전트 수수료(%)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-fee-avg" value="5.0" step="0.5" min="0" max="50" oninput="recalcP2Col('avg')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">운임 배수</label>
+                    <input class="p2-col-input" type="number" id="p2ci-freight-avg" value="1.00" step="0.05" min="0.1" max="5" oninput="recalcP2Col('avg')">
+                  </div>
+                  <div id="p2co-avg" class="p2-custom-opts"></div>
+                  <button class="p2c-add-btn" onclick="addP2ColOption('avg')">+ 옵션 추가</button>
+                </div>
+              </div>
+
+              <!-- 보수적 (3위) -->
+              <div class="p2-col p2-col--cons">
+                <div class="p2-col-rank-row">
+                  <span class="p2-col-label">보수적 (3위)</span>
+                  <span class="p2-rank-badge">RANK 3</span>
+                </div>
+                <div class="p2-col-price" id="p2c-price-cons">—</div>
+                <div class="p2-col-currency">SGD</div>
+                <div class="p2-col-sub" id="p2c-sub-cons">— USD · — KRW</div>
+                <div class="p2-col-expand-row">
+                  <button class="p2-col-expand-btn" onclick="toggleP2ColDetail('cons')">▸ 역산 · 옵션 편집</button>
+                </div>
+                <div class="p2-col-detail" id="p2cd-cons" style="display:none;">
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">기준가 (SGD)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-base-cons" value="0" step="0.1" min="0" oninput="recalcP2Col('cons')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">에이전트 수수료(%)</label>
+                    <input class="p2-col-input" type="number" id="p2ci-fee-cons" value="10.0" step="0.5" min="0" max="50" oninput="recalcP2Col('cons')">
+                  </div>
+                  <div class="p2-col-input-row">
+                    <label class="p2-col-input-label">운임 배수</label>
+                    <input class="p2-col-input" type="number" id="p2ci-freight-cons" value="1.20" step="0.05" min="0.1" max="5" oninput="recalcP2Col('cons')">
+                  </div>
+                  <div id="p2co-cons" class="p2-custom-opts"></div>
+                  <button class="p2c-add-btn" onclick="addP2ColOption('cons')">+ 옵션 추가</button>
+                </div>
+              </div>
+
+            </div><!-- /p2-three-col -->
+
+            <!-- 제품 목록 + 다운로드 (경쟁가 분포 삭제됨) -->
+            <div class="selector-card" style="margin-top:12px;">
+              <div id="p2-product-list"></div>
+              <div id="p2-report-dl-state" style="margin-top:12px;"></div>
+            </div>
+
+          </div><!-- /p2-ai-result-section -->
+
+          <div style="display:none;" aria-hidden="true">
+            <div id="p2r-product-name"></div>
+            <div id="p2r-verdict-badge" class="verdict-badge v-none"></div>
+            <div id="p2r-ref-price-text"></div>
+            <div id="p2r-exchange"></div>
+            <div id="p2r-final-price"></div>
+            <div id="p2r-scenarios"></div>
+            <div id="p2r-rationale"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 바이어 발굴 -->
+    <div class="process-section">
+      <div class="process-header" onclick="toggleProcess('p3')">
+        <div class="process-header-l">
+          <span class="process-num">03</span>
+          <div>
+            <div class="process-title">바이어 발굴</div>
+            <div class="process-sub">CPHI 크롤링 · AI 심층조사 · 실시간 랭킹 · PDF 보고서</div>
+          </div>
+        </div>
+        <span class="process-arrow" id="pa-p3">▾</span>
+      </div>
+      <div class="process-body" id="pb-p3">
+
+        <!-- 평가 항목 체크박스 — 항상 표시 (랭킹 기준 사전 설정) -->
+        <div class="selector-card">
+          <div class="p3-criteria-header">
+            <span class="selector-label" style="margin-bottom:0;">평가 항목 선택</span>
+            <div class="p3-linked-product" id="p3-linked-product">
+              <span class="p3-linked-icon">🔗</span>
+              <span class="p3-linked-title">진행 중인 품목</span>
+              <span id="p3-product-label" class="p3-product-label">—</span>
+            </div>
+          </div>
+          <div class="p3-criteria-grid">
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="기업규모"    > 기업 규모</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="유통실적"    > 유통 실적</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="GMP보유"     > GMP 보유</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="공공채널"    > 공공 채널</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="민간채널"    > 민간 채널</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="파트너적합성"> 파트너 적합성</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="한국거래"    > 한국 거래 경험</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="MAH가능"     > MAH 가능</label>
+          </div>
+        </div>
+
+        <!-- 실행 설정 -->
+        <div>
+          <div class="selector-row">
+            <button class="btn-analyze" id="btn-p3-run" onclick="runP3Pipeline()">
+              <span id="p3-run-icon">▶</span> 바이어 발굴 실행
+            </button>
+          </div>
+
+          <!-- 진행 단계 표시 -->
+          <div class="progress-row" id="p3-progress-row">
+            <div class="prog-step" id="p3prog-crawl">  <div class="prog-dot">1</div><div class="prog-label">1차 수집</div></div>
+            <div class="prog-step" id="p3prog-enrich">  <div class="prog-dot">2</div><div class="prog-label">심층조사</div></div>
+            <div class="prog-step" id="p3prog-rank">   <div class="prog-dot">3</div><div class="prog-label">랭킹 산출</div></div>
+            <div class="prog-step" id="p3prog-report"> <div class="prog-dot">4</div><div class="prog-label">PDF 생성</div></div>
+          </div>
+          <div id="p3-error-msg" class="p2-note" style="display:none;color:var(--red);"></div>
+        </div>
+
+        <!-- 결과 영역 (실행 완료 후 표시) -->
+        <div id="p3-result-section" style="display:none;">
+
+          <!-- Top 10 카드 그리드 -->
+          <div id="p3-cards" class="p3-cards-wrap"></div>
+
+          <!-- 다운로드 -->
+          <div style="margin-top:14px;">
+            <button class="btn-download" id="p3-dl-btn" onclick="downloadBuyerReport()" disabled>
+              📄 바이어 보고서 다운로드
+            </button>
+          </div>
+
+        </div><!-- /p3-result-section -->
+
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ════ 바이어 상세 모달 ════ -->
+  <div id="buyer-modal-overlay" class="buyer-modal-overlay" onclick="closeBuyerModal(event)" style="display:none;">
+    <div class="buyer-modal" id="buyer-modal">
+      <button class="buyer-modal-close" onclick="closeBuyerModal()">✕</button>
+      <div id="buyer-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ════ 인도네시아 AHP 파트너 탭 ════ -->
+  <div id="ahp" class="page">
+    <div class="macro-grid" style="margin-bottom:16px;">
+      <div class="macro-card">
+        <div class="macro-label">분석 대상 성분</div>
+        <div class="macro-value" style="font-size:18px;">Cilostazol CR</div>
+        <div class="macro-source">서방형 200mg · 1일 1회</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">임상 우위 (AUC)</div>
+        <div class="macro-value" style="font-size:18px;">93.7%</div>
+        <div class="macro-source">IR 대비 동등 약효 유지</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">부작용 감소 (Cmax)</div>
+        <div class="macro-value" style="font-size:18px;">↓ 35.6%</div>
+        <div class="macro-source">두통·심계항진 발현 억제</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-label">AHP 후보사</div>
+        <div class="macro-value" style="font-size:18px;" id="ahp-candidate-count">—</div>
+        <div class="macro-source">GMP+MAH 필수 허들 통과</div>
+      </div>
+    </div>
+
+    <div class="selector-card" style="margin-bottom:16px;">
+      <div class="selector-row">
+        <button class="btn-analyze" id="btn-ahp-run" onclick="loadAhpPartners()">
+          <span id="ahp-run-icon">▶</span> AHP 점수 산출
+        </button>
+        <span id="ahp-status-msg" style="font-size:12px;color:var(--muted);margin-left:12px;"></span>
+      </div>
+    </div>
+
+    <div id="ahp-partner-grid" class="ahp-grid"></div>
+  </div>
+
+  <!-- ════ 보고서 탭 ════ -->
+  <div id="rep" class="page">
+    <article class="card">
+      <div class="sec">
+        <div>
+          <h3>생성된 보고서</h3>
+          <p>시장조사 완료 시 자동 등록 · PDF 다운로드 가능</p>
+        </div>
+        <button class="btn-refresh" onclick="clearAllReports()" style="margin-top:0;">모두 지우기</button>
+      </div>
+      <div id="report-tab-list">
+        <div class="rep-empty">아직 생성된 보고서가 없습니다.<br>시장조사를 실행하면 여기에 자동으로 등록됩니다.</div>
+      </div>
+    </article>
+  </div>
+
+</main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js?v=5"></script>
+<script>
+(function() {
+  var map = L.map('cl-map', {
+    center: [-33.4489, -70.6693],
+    zoom: 5,
+    zoomControl: true,
+    scrollWheelZoom: true,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(map);
+  var icon = L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;background:#c8564d;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 7px rgba(200,86,77,.22),0 2px 6px rgba(0,0,0,.3);"></div>',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+  L.marker([-33.4489, -70.6693], { icon: icon })
+    .addTo(map)
+    .bindPopup('<b>Santiago, Chile</b>')
+    .openPopup();
+  setTimeout(function() { map.invalidateSize(); }, 100);
+})();
+</script>
+</body>
+</html>

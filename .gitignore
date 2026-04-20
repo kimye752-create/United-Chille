@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# 환경 변수
+.env
+.env.*
+!.env.example
+
+# 리포트 출력물
+reports/*.pdf
+reports/*.json
+
+# 폰트 (빌드 시 다운로드)
+fonts/*.ttf
+fonts/*.otf
+
+# Claude Code 워크트리 (로컬 전용)
+.claude/worktrees/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

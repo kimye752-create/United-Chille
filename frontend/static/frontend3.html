@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>바이어 발굴 — UPharma</title>
+  <link rel="stylesheet" href="/static/style.css?v=5"/>
+  <style>
+    body { padding: 24px; }
+    .page-title { font-size: 20px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .page-sub   { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+    .server-url {
+      display: inline-block; font-size: 12px; background: var(--inner);
+      color: var(--navy2); padding: 4px 10px; border-radius: 6px;
+      font-family: monospace; margin-bottom: 20px;
+    }
+    .log-box {
+      background: #1a2332; color: #b6cde8; font-family: monospace;
+      font-size: 12px; padding: 14px 16px; border-radius: 10px;
+      height: 200px; overflow-y: auto; margin-top: 16px;
+    }
+    .log-box .log-line    { margin: 2px 0; }
+    .log-box .log-success { color: #5dd88a; }
+    .log-box .log-error   { color: #f07070; }
+    .log-box .log-warn    { color: #f0c060; }
+    .log-box .log-info    { color: #b6cde8; }
+
+    /* 카드 */
+    .p3-cards-wrap { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 14px; margin-top: 18px; }
+    .p3-card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 16px; cursor: pointer; transition: box-shadow .15s;
+    }
+    .p3-card:hover { box-shadow: 0 4px 16px rgba(23,63,120,.13); }
+    .p3-card-num   { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .p3-card-name  { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+    .p3-card-country { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .p3-card-reason {
+      font-size: 12px; color: #334; line-height: 1.5;
+      background: #eef4ff; border-radius: 6px; padding: 7px 9px; margin-bottom: 8px;
+    }
+    .p3-card-contact { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .p3-card-tags   { display: flex; flex-wrap: wrap; gap: 5px; }
+    .p3-tag         { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+    .p3-tag-info    { background: #e8f4fd; color: #1a6fa8; }
+    .p3-card-hint   { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: right; }
+    .p3-empty       { text-align: center; color: var(--muted); padding: 30px; }
+
+
+    /* 모달 */
+    .buyer-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center; z-index: 9000;
+    }
+    .buyer-modal {
+      background: #fff; border-radius: 14px; padding: 28px 28px 20px;
+      width: 680px; max-width: 95vw; max-height: 85vh;
+      overflow-y: auto; position: relative; box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    }
+    .buyer-modal-close {
+      position: absolute; top: 14px; right: 16px; background: none;
+      border: none; font-size: 20px; cursor: pointer; color: var(--muted);
+    }
+    .bm-header  { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+    .bm-num     { font-size: 22px; }
+    .bm-name    { font-size: 18px; font-weight: 700; color: var(--navy); }
+    .bm-meta    { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .bm-section {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--navy); margin: 14px 0 6px;
+      padding-bottom: 3px; border-bottom: 1px solid #e2e8f0;
+    }
+    .bm-section.highlight { color: #1a6fa8; border-color: #b8d8f8; }
+    .bm-reason {
+      font-size: 13px; line-height: 1.7; color: #223;
+      background: #eef4ff; border-radius: 8px; padding: 10px 14px;
+    }
+    .bm-overview { font-size: 13px; line-height: 1.7; color: #334; }
+    .bm-table   { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .bm-table th {
+      width: 120px; padding: 5px 8px; background: #f5f7fa;
+      color: var(--navy); font-weight: 600; text-align: left;
+      border: 1px solid #e2e8f0; vertical-align: top;
+    }
+    .bm-table td {
+      padding: 5px 8px; border: 1px solid #e2e8f0;
+      vertical-align: top; word-break: break-all;
+    }
+    .bm-link    { color: #1a6fa8; text-decoration: underline; word-break: break-all; }
+    .bm-yes     { color: #27ae60; font-weight: 600; }
+    .bm-no      { color: #c8564d; }
+    .bm-sources { display: flex; flex-direction: column; gap: 4px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div style="max-width:960px;margin:0 auto;">
+    <div class="page-title">바이어 발굴</div>
+    <div class="page-sub">CPHI 크롤링 · Claude Sonnet 심층조사 · 기준 재적용 · PDF 보고서</div>
+    <span class="server-url">http://127.0.0.1:8765/frontend3</span>
+
+    <!-- 품목 선택 -->
+    <div class="selector-card" style="margin-bottom:14px;">
+      <div class="selector-label">품목 선택</div>
+      <div class="selector-row">
+        <select id="product-select" style="flex:1;">
+          <option value="SG_sereterol_activair">[일반제] Sereterol Activair · fluticasone+salmeterol</option>
+          <option value="SG_omethyl_omega3_2g">[개량신약] Omethyl Cutielet · omega-3 ethyl esters 2g</option>
+          <option value="SG_hydrine_hydroxyurea_500">[항암제] Hydrine · hydroxyurea 500mg</option>
+          <option value="SG_gadvoa_gadobutrol_604">[일반제] Gadvoa Inj. · gadobutrol 604.72mg</option>
+          <option value="SG_rosumeg_combigel">[개량신약] Rosumeg Combigel · rosuvastatin+omega-3</option>
+          <option value="SG_atmeg_combigel">[개량신약] Atmeg Combigel · atorvastatin+omega-3</option>
+          <option value="SG_ciloduo_cilosta_rosuva">[개량신약] Ciloduo · cilostazol+rosuvastatin</option>
+          <option value="SG_gastiin_cr_mosapride">[개량신약] Gastiin CR · mosapride citrate 15mg</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 타깃 국가 설정 -->
+    <div class="selector-card" style="margin-bottom:14px;">
+      <div class="selector-label">타깃 국가 설정</div>
+      <div class="selector-row" style="gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
+          <label style="font-size:12px;color:var(--muted);white-space:nowrap;">타깃 국가</label>
+          <input type="text" id="inp-target-country" value="Singapore"
+            style="flex:1;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;padding:5px 10px;"/>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:180px;">
+          <label style="font-size:12px;color:var(--muted);white-space:nowrap;">검색 범위</label>
+          <input type="text" id="inp-target-region" value="Asia"
+            style="flex:1;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;padding:5px 10px;"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- 실행 버튼 -->
+    <div class="selector-card" style="margin-bottom:14px;">
+      <div class="selector-row">
+        <button class="btn-analyze" id="btn-p3-run" onclick="runP3Pipeline()">
+          <span id="p3-run-icon">▶</span> 바이어 발굴 실행
+        </button>
+      </div>
+      <div class="progress-row" id="p3-progress-row" style="margin-top:14px;">
+        <div class="prog-step" id="p3prog-crawl">  <div class="prog-dot">1</div><div class="prog-label">1차 수집</div></div>
+        <div class="prog-step" id="p3prog-enrich"> <div class="prog-dot">2</div><div class="prog-label">Haiku 분석</div></div>
+        <div class="prog-step" id="p3prog-rank">   <div class="prog-dot">3</div><div class="prog-label">Top 10 선정</div></div>
+        <div class="prog-step" id="p3prog-report"> <div class="prog-dot">4</div><div class="prog-label">PDF 생성</div></div>
+      </div>
+      <div id="p3-error-msg" class="p2-note" style="display:none;color:var(--red);margin-top:10px;"></div>
+      <div class="log-box" id="p3-log-box">
+        <div class="log-line log-info">— 로그 대기 중 —</div>
+      </div>
+    </div>
+
+    <!-- 결과 영역 -->
+    <div id="p3-result-section" style="display:none;">
+      <div id="p3-cards" class="p3-cards-wrap"></div>
+      <div style="margin-top:14px;">
+        <button class="btn-download" id="p3-dl-btn" onclick="downloadBuyerReport()" disabled>
+          📄 바이어 보고서 다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달 -->
+<div id="buyer-modal-overlay" class="buyer-modal-overlay" onclick="closeBuyerModal(event)" style="display:none;">
+  <div class="buyer-modal" id="buyer-modal">
+    <button class="buyer-modal-close" onclick="closeBuyerModal()">✕</button>
+    <div id="buyer-modal-body"></div>
+  </div>
+</div>
+
+<script>
+/* ── 상태 ── */
+let _p3LastProduct   = null;
+let _p3AllCandidates = [];
+let _p3Buyers        = [];
+let _p3PdfName       = null;
+let _p3PollTimer     = null;
+
+/* ── 유틸 ── */
+function _escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _log(msg, level='info') {
+  const box = document.getElementById('p3-log-box');
+  if (!box) return;
+  if (box.querySelector('.log-line.log-info')?.textContent === '— 로그 대기 중 —') box.innerHTML = '';
+  const line = document.createElement('div');
+  line.className = `log-line log-${level}`;
+  const now = new Date().toLocaleTimeString('ko-KR');
+  line.textContent = `[${now}] ${msg}`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ── 진행 단계 ── */
+function _setP3Progress(stepId, state) {
+  const el = document.getElementById('p3prog-' + stepId);
+  if (!el) return;
+  el.classList.remove('running','done','error');
+  if (state) el.classList.add(state);
+}
+function _resetP3Progress() {
+  for (const s of ['crawl','enrich','rank','report']) _setP3Progress(s,'');
+}
+
+/* ── 재선택 안내 표시/숨김 ── */
+function _updateReselectNote() {
+  const note = document.getElementById('p3-reselect-note');
+  const currentProduct = document.getElementById('product-select')?.value;
+  if (!note) return;
+  const hasPool = _p3AllCandidates.length > 0;
+  const sameProduct = currentProduct === _p3LastProduct;
+  note.style.display = (hasPool && sameProduct) ? '' : 'none';
+}
+
+/* ── 메인 실행 ── */
+async function runP3Pipeline() {
+  const btn     = document.getElementById('btn-p3-run');
+  const icon    = document.getElementById('p3-run-icon');
+  const errEl   = document.getElementById('p3-error-msg');
+  const product = document.getElementById('product-select')?.value || 'SG_sereterol_activair';
+
+  if (btn) btn.disabled = true;
+  if (icon) icon.textContent = '…';
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  document.getElementById('p3-result-section').style.display = 'none';
+  _resetP3Progress();
+  _setP3Progress('crawl','running');
+
+  _p3LastProduct   = product;
+  _p3AllCandidates = [];
+  _p3Buyers        = [];
+  _p3PdfName       = null;
+
+  const targetCountry = document.getElementById('inp-target-country')?.value.trim() || 'Singapore';
+  const targetRegion  = document.getElementById('inp-target-region')?.value.trim()  || 'Asia';
+  _log(`바이어 발굴 시작 — 품목: ${product} / 타깃: ${targetCountry}`);
+
+  try {
+    const res = await fetch('/api/buyers/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_key:    product,
+        target_country: targetCountry,
+        target_region:  targetRegion,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    _log('파이프라인 실행 요청 성공', 'success');
+    if (_p3PollTimer) clearInterval(_p3PollTimer);
+    _p3PollTimer = setInterval(_pollP3, 2500);
+  } catch (e) {
+    if (errEl) { errEl.style.display = ''; errEl.textContent = `오류: ${e.message}`; }
+    if (btn)  btn.disabled = false;
+    if (icon) icon.textContent = '▶';
+    _resetP3Progress();
+    _log(`오류: ${e.message}`, 'error');
+  }
+}
+
+/* ── 폴링 ── */
+async function _pollP3() {
+  try {
+    const res  = await fetch('/api/buyers/status');
+    const data = await res.json();
+
+    const stepOrder = ['crawl','enrich','rank','report'];
+    const idx = stepOrder.indexOf(data.step);
+    if (idx >= 0) {
+      for (let i = 0; i < idx; i++) _setP3Progress(stepOrder[i], 'done');
+      _setP3Progress(stepOrder[idx], 'running');
+    }
+    if (data.crawl_count > 0) _log(`1차 수집: ${data.crawl_count}개 후보 확보`);
+
+    if (data.status === 'done') {
+      clearInterval(_p3PollTimer); _p3PollTimer = null;
+      for (const s of stepOrder) _setP3Progress(s, 'done');
+      _log('파이프라인 완료 — 결과 불러오는 중…', 'success');
+
+      const rr     = await fetch('/api/buyers/result');
+      const result = await rr.json();
+      _p3Buyers  = result.buyers || [];
+      _p3PdfName = result.pdf   || null;
+      _log(`Top ${_p3Buyers.length}개 바이어 선정`, 'success');
+      if (_p3PdfName) _log(`PDF 생성 완료: ${_p3PdfName}`, 'success');
+
+      // 전체 후보 풀은 서버 /api/buyers/status의 candidate_count로 확인 — 재선택 시 서버가 보유
+      _p3AllCandidates = new Array(data.candidate_count || _p3Buyers.length);
+
+      _renderP3Cards(_p3Buyers);
+      document.getElementById('p3-result-section').style.display = '';
+      const dlBtn = document.getElementById('p3-dl-btn');
+      if (dlBtn && _p3PdfName) dlBtn.disabled = false;
+
+      const btn  = document.getElementById('btn-p3-run');
+      const icon = document.getElementById('p3-run-icon');
+      if (btn)  btn.disabled = false;
+      if (icon) icon.textContent = '▶';
+
+    } else if (data.status === 'error') {
+      clearInterval(_p3PollTimer); _p3PollTimer = null;
+      const errEl = document.getElementById('p3-error-msg');
+      if (errEl) { errEl.style.display = ''; errEl.textContent = `오류: ${data.step_label || '파이프라인 실패'}`; }
+      if (data.step) _setP3Progress(data.step, 'error');
+      _log(`오류: ${data.step_label || '파이프라인 실패'}`, 'error');
+      const btn  = document.getElementById('btn-p3-run');
+      const icon = document.getElementById('p3-run-icon');
+      if (btn)  btn.disabled = false;
+      if (icon) icon.textContent = '▶';
+    } else {
+      _log(`진행 중 — ${data.step_label || data.step}`);
+    }
+  } catch (_) {}
+}
+
+/* ── SSE 실시간 로그 ── */
+(function startSSE() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.phase === 'buyer') _log(d.message, d.level || 'info');
+    } catch (_) {}
+  };
+  es.onerror = () => {};
+})();
+
+/* ── 카드 렌더링 ── */
+function _renderP3Cards(buyers) {
+  const wrap = document.getElementById('p3-cards');
+  if (!wrap) return;
+  if (!buyers.length) {
+    wrap.innerHTML = '<div class="p3-empty">발굴된 바이어가 없습니다.</div>';
+    return;
+  }
+  wrap.innerHTML = buyers.map((b, i) => {
+    const country  = b.country  || '-';
+    const email    = b.email    || '-';
+    const phone    = b.phone    || '-';
+    const category = b.category || '-';
+    const e        = b.enriched || {};
+
+    // 추천 이유 미리보기 (첫 2문장)
+    const reason = e.recommendation_reason || '';
+    const reasonPreview = reason !== '-' && reason
+      ? reason.split(/[.。!?！？]\s+/).slice(0,2).join('. ').slice(0,120) + (reason.length > 120 ? '…' : '')
+      : '';
+
+    const tags = [];
+    if (e.has_gmp)            tags.push('GMP인증');
+    if (e.mah_capable)        tags.push('MAH가능');
+    if (e.public_channel)     tags.push('공공채널');
+    if (e.private_channel)    tags.push('민간채널');
+    if (e.korea_experience && e.korea_experience !== '-' && e.korea_experience !== '없음')
+                               tags.push('한국거래');
+    const tagHtml = tags.map(t => `<span class="p3-tag p3-tag-info">${_escHtml(t)}</span>`).join('');
+
+    return `
+      <div class="p3-card" onclick="showBuyerDetail(${i})">
+        <div class="p3-card-num">${i + 1}</div>
+        <div class="p3-card-name">${_escHtml(b.company_name || '-')}</div>
+        <div class="p3-card-country">${_escHtml(country)} · ${_escHtml(category)}</div>
+        ${reasonPreview ? `<div class="p3-card-reason">${_escHtml(reasonPreview)}</div>` : ''}
+        <div class="p3-card-contact">
+          ${email !== '-' ? `<div>✉ ${_escHtml(email)}</div>` : ''}
+          ${phone !== '-' ? `<div>☎ ${_escHtml(phone)}</div>` : ''}
+        </div>
+        ${tagHtml ? `<div class="p3-card-tags">${tagHtml}</div>` : ''}
+        <div class="p3-card-hint">클릭하여 상세 보기</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── 상세 모달 ── */
+function showBuyerDetail(idx) {
+  const b = _p3Buyers[idx];
+  if (!b) return;
+  const e = b.enriched || {};
+
+  function row(label, val) {
+    if (val === null || val === undefined || val === '' || val === '-') return '';
+    return `<tr><th>${label}</th><td>${_escHtml(String(val))}</td></tr>`;
+  }
+  function yn(val) {
+    if (val === true)  return '<span class="bm-yes">있음</span>';
+    if (val === false) return '<span class="bm-no">없음</span>';
+    return '-';
+  }
+
+  const territories = (e.territories || []).join(', ');
+  const matched     = (b.matched_ingredients || []).join(' · ');
+
+  // 웹사이트 링크
+  const websiteHtml = (b.website && b.website !== '-')
+    ? `<tr><th>웹사이트</th><td>
+        <a class="bm-link" href="${_escHtml(b.website)}" target="_blank" rel="noopener">${_escHtml(b.website)}</a>
+      </td></tr>`
+    : '';
+
+  // 출처 URL
+  const sourcesHtml = (e.source_urls || [])
+    .map(u => `<a class="bm-link" href="${_escHtml(u)}" target="_blank" rel="noopener">${_escHtml(u)}</a>`)
+    .join('');
+
+  document.getElementById('buyer-modal-body').innerHTML = `
+    <div class="bm-header">
+      <div class="bm-num">${idx + 1}</div>
+      <div>
+        <div class="bm-name">${_escHtml(b.company_name || '-')}</div>
+        <div class="bm-meta">${_escHtml(b.country || '-')} · ${_escHtml(b.category || '-')}</div>
+      </div>
+    </div>
+
+    ${e.company_overview_kr && e.company_overview_kr !== '-'
+      ? `<div class="bm-section">기업 개요</div>
+         <div class="bm-overview">${_escHtml(e.company_overview_kr)}</div>`
+      : ''}
+
+    ${e.recommendation_reason && e.recommendation_reason !== '-'
+      ? `<div class="bm-section highlight">추천 이유</div>
+         <div class="bm-reason">${_escHtml(e.recommendation_reason)}</div>`
+      : ''}
+
+    <div class="bm-section">연락처</div>
+    <table class="bm-table">
+      ${row('주소', b.address)}${row('전화', b.phone)}${row('팩스', b.fax)}
+      ${row('이메일', b.email)}${websiteHtml}${row('부스', b.booth)}
+    </table>
+
+    <div class="bm-section">기업 규모</div>
+    <table class="bm-table">
+      ${row('연 매출', e.revenue)}${row('임직원 수', e.employees)}${row('설립연도', e.founded)}
+      ${territories ? `<tr><th>사업 지역</th><td>${_escHtml(territories)}</td></tr>` : ''}
+    </table>
+
+    <div class="bm-section">역량 · 실적</div>
+    <table class="bm-table">
+      <tr><th>GMP 인증</th><td>${yn(e.has_gmp)}</td></tr>
+      <tr><th>수입 이력</th><td>${yn(e.import_history)}</td></tr>
+      <tr><th>공공조달 이력</th><td>${yn(e.procurement_history)}</td></tr>
+    </table>
+
+    <div class="bm-section">채널 · 파트너십</div>
+    <table class="bm-table">
+      <tr><th>공공 채널</th><td>${yn(e.public_channel)}</td></tr>
+      <tr><th>민간 채널</th><td>${yn(e.private_channel)}</td></tr>
+      <tr><th>약국 체인</th><td>${yn(e.has_pharmacy_chain)}</td></tr>
+      <tr><th>MAH 대행</th><td>${yn(e.mah_capable)}</td></tr>
+      ${row('한국 거래 경험', e.korea_experience)}
+    </table>
+
+    ${matched ? `<div class="bm-section">성분 매칭</div>
+      <div style="font-size:13px;padding:4px 0;">🧪 ${_escHtml(matched)}</div>` : ''}
+
+    ${sourcesHtml
+      ? `<div class="bm-section">참조 출처</div>
+         <div class="bm-sources">${sourcesHtml}</div>`
+      : ''}
+  `;
+
+  document.getElementById('buyer-modal-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBuyerModal(e) {
+  if (e && e.target !== document.getElementById('buyer-modal-overlay')) return;
+  document.getElementById('buyer-modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+/* ── 다운로드 ── */
+function downloadBuyerReport() {
+  const url = _p3PdfName
+    ? `/api/buyers/report/download?name=${encodeURIComponent(_p3PdfName)}`
+    : '/api/buyers/report/download';
+  window.open(url, '_blank');
+}
+</script>
+</body>
+</html>
