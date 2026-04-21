@@ -461,7 +461,7 @@ async def _run_custom_pipeline(trade_name: str, inn: str, dosage_form: str) -> N
         _reports_dir2 = ROOT / "reports"
         _reports_dir2.mkdir(parents=True, exist_ok=True)
 
-        _products_db2 = await asyncio.to_thread(fetch_kup_products, "SG")
+        _products_db2 = await asyncio.to_thread(fetch_kup_products, "CL")
         _refs_map2 = {"custom": refs}
         _report2 = await asyncio.to_thread(
             lambda: build_report(
@@ -471,7 +471,7 @@ async def _run_custom_pipeline(trade_name: str, inn: str, dosage_form: str) -> N
                 references=_refs_map2,
             )
         )
-        _pdf_name2 = f"sg_report_custom_{_ts2}.pdf"
+        _pdf_name2 = f"cl_report_custom_{_ts2}.pdf"
         _pdf_path2 = _reports_dir2 / _pdf_name2
         await asyncio.to_thread(render_pdf, _report2, _pdf_path2)
 
@@ -740,7 +740,7 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
 
         client = anthropic.Anthropic(api_key=api_key)
 
-        extract_prompt = f"""다음 의약품 수출 분석 보고서에서 가격 관련 정보를 추출하세요.
+        extract_prompt = f"""다음 의약품 수출 분석 보고서(칠레 시장)에서 가격 관련 정보를 추출하세요.
 
 보고서 내용:
 {pdf_text[:7000]}
@@ -748,20 +748,21 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
 {{
   "product_name": "제품명 (없으면 '미상')",
-  "ref_price_sgd": 숫자 또는 null,
-  "ref_price_currency": "SGD 또는 USD",
+  "ref_price_clp": 숫자 또는 null,
+  "ref_price_usd": 숫자 또는 null,
   "ref_price_text": "원문 가격 텍스트 (없으면 빈 문자열)",
-  "competitor_prices": [{{"name": "경쟁사명", "price_sgd": 숫자}}],
+  "competitor_prices": [{{"name": "경쟁사명", "price_clp": 숫자}}],
   "market_context": "시장 맥락 요약 (1-2문장)",
   "hs_code": "HS 코드 (없으면 빈 문자열)",
   "verdict": "수출 적합성 판정 (적합/조건부/부적합/미상)"
 }}
 
 가격 추출 규칙 (반드시 준수):
-- '참고 SGD X.XX', 'SGD X.XX 수준', 'DPMQ ... 참고 SGD X.XX' 등 SGD 금액이 포함된 모든 표현에서 숫자를 추출하세요.
-- 'PBS 방법론적 추산', '싱가포르 약가 아님' 같은 면책 문구가 있어도 SGD 숫자는 ref_price_sgd에 넣으세요.
-- 보고서의 '참고 가격', '가격 포지셔닝', 'DPMQ' 섹션을 특히 확인하세요.
-- USD($) 금액만 있다면 ref_price_sgd는 null로, ref_price_currency는 'USD'로, ref_price_text에 원문 그대로 기록하세요."""
+- Cruz Verde / Salcobrand / Farmacias Ahumada 소매가(CLP)를 ref_price_clp에 넣으세요.
+- CENABAST 소매 상한가(Ley 21.198) 또는 낙찰가가 있으면 그 CLP 값을 우선시하세요.
+- Mercado Público 낙찰가(CLP)가 있으면 ref_price_clp에 넣으세요.
+- CLP 금액이 없고 USD($) 금액만 있다면 ref_price_usd에 넣으세요.
+- '참고 USD X.XX', 'USD X.XX 수준', 'FOB USD X.XX' 등의 표현에서 숫자를 추출하세요."""
 
         extract_resp = await asyncio.to_thread(
             lambda: client.messages.create(
@@ -780,16 +781,18 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         except Exception:
             extracted = {
                 "product_name": "미상",
-                "ref_price_sgd": None,
+                "ref_price_clp": None,
+                "ref_price_usd": None,
                 "ref_price_text": "",
                 "market_context": "",
                 "verdict": "미상",
             }
 
         _p2_ai_task["extracted"] = extracted
+        ref_clp_display = f"CLP {float(extracted.get('ref_price_clp') or 0):,.0f}" if extracted.get("ref_price_clp") else (extracted.get("ref_price_text") or "미확인")
         await _emit({
             "phase": "p2_pipeline",
-            "message": f"가격 추출 완료 — 참조가: SGD {extracted.get('ref_price_sgd', '미확인')}",
+            "message": f"가격 추출 완료 — 참조가: {ref_clp_display}",
             "level": "success",
         })
 
@@ -798,17 +801,22 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         await _emit({"phase": "p2_pipeline", "message": "yfinance 환율 조회", "level": "info"})
 
         exchange_rates: dict[str, Any] = {
-            "sgd_krw": 1085.0, "usd_krw": 1393.0,
-            "sgd_usd": 0.7795, "source": "폴백값 (Yahoo Finance 연결 실패)",
+            "usd_clp": 932.0, "clp_usd": 0.001073,
+            "usd_krw": 1393.0, "clp_krw": 1.495,
+            "source": "폴백값 (Yahoo Finance 연결 실패)",
         }
         try:
             import yfinance as yf  # type: ignore[import]
 
             def _fetch_rates() -> dict[str, Any]:
+                usd_clp = round(float(yf.Ticker("USDCLP=X").fast_info.last_price), 2)
+                usd_krw = round(float(yf.Ticker("USDKRW=X").fast_info.last_price), 2)
+                clp_usd = round(1.0 / usd_clp, 8) if usd_clp else 0.001073
                 return {
-                    "sgd_krw": round(float(yf.Ticker("SGDKRW=X").fast_info.last_price), 2),
-                    "usd_krw": round(float(yf.Ticker("USDKRW=X").fast_info.last_price), 2),
-                    "sgd_usd": round(float(yf.Ticker("SGDUSD=X").fast_info.last_price), 4),
+                    "usd_clp": usd_clp,
+                    "clp_usd": clp_usd,
+                    "usd_krw": usd_krw,
+                    "clp_krw": round(clp_usd * usd_krw, 6),
                     "source": "Yahoo Finance (실시간)",
                 }
 
@@ -819,7 +827,7 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         _p2_ai_task["exchange_rates"] = exchange_rates
         await _emit({
             "phase": "p2_pipeline",
-            "message": f"환율 — 1 SGD = {exchange_rates['sgd_krw']} KRW",
+            "message": f"환율 — 1 USD = {exchange_rates['usd_clp']} CLP / {exchange_rates['usd_krw']} KRW",
             "level": "success",
         })
 
@@ -827,45 +835,63 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         _p2_ai_task.update({"step": "ai_analysis", "step_label": "AI 최종 분석 중…"})
         await _emit({"phase": "p2_pipeline", "message": "Claude Haiku — 최종 가격 전략 분석", "level": "info"})
 
-        ref_price    = extracted.get("ref_price_sgd") or 0
-        ref_display  = f"SGD {float(ref_price):.2f}" if ref_price else (extracted.get("ref_price_text") or "미확인")
-        sgd_krw      = exchange_rates["sgd_krw"]
-        market_label = "공공 시장 (ALPS/조달청 채널)" if market == "public" else "민간 시장 (병원·약국·체인 채널)"
+        ref_price_clp = extracted.get("ref_price_clp") or 0
+        ref_price_usd = extracted.get("ref_price_usd") or 0
+        usd_clp       = exchange_rates["usd_clp"]
+        usd_krw       = exchange_rates["usd_krw"]
+        clp_krw       = exchange_rates["clp_krw"]
+
+        # CLP 참조가가 없으면 USD로 환산
+        if not ref_price_clp and ref_price_usd:
+            ref_price_clp = round(ref_price_usd * usd_clp, 0)
+        ref_display = f"CLP {float(ref_price_clp):,.0f}" if ref_price_clp else (extracted.get("ref_price_text") or "미확인")
+
+        market_label = "공공 시장 (Mercado Público · CENABAST 공급 채널)" if market == "public" else "민간 시장 (Cruz Verde / Salcobrand / Farmacias Ahumada 채널)"
         verdict_src  = extracted.get("verdict", "미상")
         competitor_json = json.dumps(extracted.get("competitor_prices", []), ensure_ascii=False)
 
-        analysis_prompt = f"""싱가포르 수출 가격 전략을 수립해주세요.
+        analysis_prompt = f"""칠레 제약 시장 수출 가격 전략을 수립해주세요.
 
 ## 추출된 보고서 정보
 - 제품명: {extracted.get('product_name', '미상')}
 - 수출 적합성 판정: {verdict_src}
-- 참조가: {ref_display}
+- 소매 참조가 (CLP): {ref_display}
 - 참조가 원문: {extracted.get('ref_price_text', '없음')}
 - HS 코드: {extracted.get('hs_code', '미상')}
 - 시장: {market_label}
-- 현재 환율: 1 SGD = {sgd_krw:.2f} KRW (실시간 Yahoo Finance)
+- 현재 환율: 1 USD = {usd_clp:.2f} CLP / 1 USD = {usd_krw:.2f} KRW (실시간 Yahoo Finance)
 - 경쟁사 가격: {competitor_json}
 - 시장 맥락: {extracted.get('market_context', '정보 없음')}
 
+## 칠레 시장 세금·규제 구조 (반드시 반영)
+- IVA (부가세): 19% → 소매가 ÷ 1.19 = 세전가
+- 수입 관세: 6% (HS 3004, FTA 적용 시 0%)
+- 소매 마진: 민간 약국 체인 25-35%, 공공 채널 10-15%
+- 파트너(유통사) 마진: 15-25%
+
 ## 요청
-1. 싱가포르 제약 시장의 특성, 판정 결과, 시장 구분을 종합해 최종 수출 권고가를 산정하세요.
+1. CLP 소매 참조가에서 역산하여 FOB USD 수출 권고가를 산정하세요:
+   공공: CLP 소매가 → 공공 할인(–15%) → ÷ 1.19 IVA → × (1 – 관세6%) → ÷ 파트너마진 = FOB USD
+   민간: CLP 소매가 → ÷ 1.19 IVA → × (1 – 소매마진30%) → × (1 – 파트너마진20%) → × (1 – 관세6%) = FOB USD
 2. 시나리오는 공격·평균·보수 3개로 구분하세요. 각 시나리오마다:
-   - 가격 근거·포지셔닝 전략·적합 상황을 포함한 한 문단(3-4문장)으로 reason을 작성하세요.
-   - 구체적인 계산식을 formula 필드에 작성하세요 (예: SGD 9.87 × 0.85 = SGD 8.39).
+   - CLP 소매가 기준 및 FOB USD 역산가 모두 표시
+   - 가격 근거·포지셔닝 전략·적합 상황을 포함한 한 문단(3-4문장)으로 reason 작성
+   - 구체적인 역산 계산식을 formula 필드에 작성
 3. rationale은 3-4문장으로 시장 근거·판정 근거·리스크를 포함해 서술하세요.
 
 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
 {{
-  "final_price_sgd": 숫자,
+  "final_price_clp": 숫자,
+  "final_price_usd": 숫자,
   "rationale": "산정 이유 3-4문장",
   "scenarios": [
-    {{"name": "공격", "price_sgd": 숫자, "reason": "저마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "계산식 (예: SGD 9.87 × 0.85 = SGD 8.39)"}},
-    {{"name": "평균", "price_sgd": 숫자, "reason": "중간 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "계산식"}},
-    {{"name": "보수", "price_sgd": 숫자, "reason": "고마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "계산식"}}
+    {{"name": "공격", "price_clp": 숫자, "price_usd": 숫자, "reason": "저마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식 (예: CLP 5,800 ÷1.19 ×0.70 ×0.85 = USD X.XX)"}},
+    {{"name": "평균", "price_clp": 숫자, "price_usd": 숫자, "reason": "중간 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식"}},
+    {{"name": "보수", "price_clp": 숫자, "price_usd": 숫자, "reason": "고마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식"}}
   ]
 }}
 
-참조가가 미확인이라면 시장 데이터·경쟁사·제품 특성을 기반으로 합리적인 가격을 추정하세요."""
+CLP 참조가가 미확인이라면 칠레 시장 데이터·경쟁사·제품 특성을 기반으로 합리적인 CLP 가격을 추정하여 역산하세요."""
 
         analysis_resp = await asyncio.to_thread(
             lambda: client.messages.create(
@@ -882,27 +908,31 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
             if m_json2:
                 analysis = json.loads(m_json2.group(0))
         except Exception:
-            final_est = (ref_price * 0.30) if ref_price else 0
+            # 폴백: CLP 소매가 기준 역산
+            base_clp = ref_price_clp or 5000
+            est_usd = round(base_clp / usd_clp * 0.35, 2) if usd_clp else round(base_clp * 0.001073 * 0.35, 2)
+            est_clp = round(base_clp * 0.35, 0)
             analysis = {
-                "final_price_sgd": round(final_est, 2),
-                "rationale": "AI 응답 파싱 중 오류가 발생했습니다. 기본값 30% 비율로 산정합니다.",
+                "final_price_clp": est_clp,
+                "final_price_usd": est_usd,
+                "rationale": "AI 응답 파싱 중 오류가 발생했습니다. CLP 소매가 35% 역산 기본값으로 산정합니다.",
                 "scenarios": [
-                    {"name": "공격", "price_sgd": round(final_est * 0.88, 2),
-                     "reason": "저마진 포지셔닝 — 시장 진입 초기, 자사가 손해를 감수하며 가격경쟁력을 앞세워 점유율을 선점합니다.",
-                     "formula": f"SGD {final_est:.2f} × 0.88 = SGD {round(final_est * 0.88, 2):.2f}"},
-                    {"name": "평균", "price_sgd": round(final_est, 2),
+                    {"name": "공격", "price_clp": round(est_clp * 0.88, 0), "price_usd": round(est_usd * 0.88, 2),
+                     "reason": "저마진 포지셔닝 — 시장 진입 초기, 가격경쟁력을 앞세워 Mercado Público 입찰·약국 채널 동시 진입을 목표로 합니다.",
+                     "formula": f"CLP {base_clp:,.0f} × 0.88 × 35% = CLP {round(est_clp * 0.88):,.0f} ≈ USD {round(est_usd * 0.88, 2):.2f}"},
+                    {"name": "평균", "price_clp": est_clp, "price_usd": est_usd,
                      "reason": "중간 포지셔닝 — 리스크와 마진의 균형을 유지하는 기본 산정가입니다.",
-                     "formula": f"SGD {final_est:.2f} (기준가 그대로)"},
-                    {"name": "보수", "price_sgd": round(final_est * 1.12, 2),
-                     "reason": "고마진 포지셔닝 — 자사 제품이 시장 내 자리를 잡은 이후 마진율을 높여 이익 확대를 노립니다.",
-                     "formula": f"SGD {final_est:.2f} × 1.12 = SGD {round(final_est * 1.12, 2):.2f}"},
+                     "formula": f"CLP {base_clp:,.0f} × 35% = CLP {est_clp:,.0f} ≈ USD {est_usd:.2f}"},
+                    {"name": "보수", "price_clp": round(est_clp * 1.12, 0), "price_usd": round(est_usd * 1.12, 2),
+                     "reason": "고마진 포지셔닝 — 제품이 칠레 시장에 안착한 후 마진율을 높여 이익 확대를 노립니다.",
+                     "formula": f"CLP {base_clp:,.0f} × 1.12 × 35% = CLP {round(est_clp * 1.12):,.0f} ≈ USD {round(est_usd * 1.12, 2):.2f}"},
                 ],
             }
 
         _p2_ai_task["analysis"] = analysis
         await _emit({
             "phase": "p2_pipeline",
-            "message": f"최종 분석 완료 — SGD {analysis.get('final_price_sgd', 0):.2f}",
+            "message": f"최종 분석 완료 — CLP {analysis.get('final_price_clp', 0):,.0f} / USD {analysis.get('final_price_usd', 0):.2f}",
             "level": "success",
         })
 
@@ -921,13 +951,16 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         _pdf_name_p2 = f"cl_p2_{_safe}_{_ts_p2}.pdf"
         _pdf_path_p2 = _reports_dir_p2 / _pdf_name_p2
 
-        # AI 시나리오 필드명 정규화 (PDF generator는 label/price 사용)
+        # AI 시나리오 필드명 정규화 (PDF generator는 label/price 사용, CLP 기준)
         raw_scenarios = analysis.get("scenarios", []) or []
         norm_scenarios = []
         for sc in raw_scenarios:
+            price_clp = sc.get("price_clp", 0)
+            price_usd = sc.get("price_usd", 0)
             norm_scenarios.append({
                 "label":   sc.get("name", sc.get("label", "")),
-                "price":   sc.get("price_sgd", sc.get("price", 0)),
+                "price":   price_usd,   # PDF는 USD 기준
+                "price_clp": price_clp,
                 "reason":  sc.get("reason", ""),
                 "formula": sc.get("formula", ""),
             })
@@ -936,9 +969,9 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
             "product_name": extracted.get("product_name", "미상"),
             "verdict":      verdict_src,
             "seg_label":    market_label,
-            "base_price":   analysis.get("final_price_sgd", 0),
-            "formula_str":  "",
-            "mode_label":   "AI 분석 (Claude Haiku)",
+            "base_price":   analysis.get("final_price_usd", 0),
+            "formula_str":  f"CLP {analysis.get('final_price_clp', 0):,.0f} → FOB USD {analysis.get('final_price_usd', 0):.2f}",
+            "mode_label":   "AI 분석 (Claude Haiku · 칠레 IVA 역산)",
             "scenarios":    norm_scenarios,
             "ai_rationale": [analysis.get("rationale", "")],
         }
@@ -1072,21 +1105,21 @@ async def datasource_status() -> JSONResponse:
     """Supabase 연결 상태, KUP 품목 수, HSA 컨텍스트 출처 반환."""
     try:
         from utils.db import get_client, fetch_kup_products
-        kup_rows = fetch_kup_products("SG")
+        kup_rows = fetch_kup_products("CL")
         kup_count = len(kup_rows)
 
-        # HSA 컨텍스트 테이블 점검
+        # CL 컨텍스트 테이블 점검
         sb = get_client()
         ctx_count = 0
         context_source = "없음"
         try:
             ctx_rows = (
-                sb.table("sg_product_context")
+                sb.table("cl_product_context")
                 .select("product_id", count="exact")
                 .execute()
             )
             ctx_count = ctx_rows.count or 0
-            context_source = f"sg_product_context {ctx_count}건" if ctx_count else "products 테이블 폴백"
+            context_source = f"cl_product_context {ctx_count}건" if ctx_count else "products 테이블 폴백"
         except Exception:
             context_source = "조회 실패"
 
