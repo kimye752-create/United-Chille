@@ -104,19 +104,39 @@ function toggleProcess(id) {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 async function loadMacro() {
+  // 폴백 정적값 (API 실패 시 즉시 표시)
+  const _FB = {
+    gdp:    ['USD 3,303억', 'World Bank 2024'],
+    pop:    ['1,848만 명',  'INE Chile · 2024 센서스'],
+    pharma: ['USD 24.5억', 'IQVIA / pharmatradz 2024'],
+    import: ['80.4%',      'CEPAL · Salud y Fármacos 2024'],
+  };
+  const _apply = (d) => {
+    const gdpB   = d?.gdp_usd_b;
+    const popN   = d?.population;
+    const phaB   = d?.pharma_market_usd_b;
+    const impPct = d?.pharma_import_pct;
+    _setMacro('macro-gdp',
+      gdpB   ? `USD ${(gdpB * 100).toLocaleString('ko-KR', {maximumFractionDigits:0})}억` : _FB.gdp[0],
+      'macro-gdp-src',    d?.source?.gdp    || _FB.gdp[1]);
+    _setMacro('macro-pop',
+      popN   ? `${Math.round(popN / 10000).toLocaleString('ko-KR')}만 명`                 : _FB.pop[0],
+      'macro-pop-src',    d?.source?.population || _FB.pop[1]);
+    _setMacro('macro-pharma',
+      phaB   ? `USD ${phaB.toFixed(2)}B`                                                  : _FB.pharma[0],
+      'macro-pharma-src', d?.source?.pharma_market || _FB.pharma[1]);
+    _setMacro('macro-import',
+      impPct != null ? `${impPct}%`                                                        : _FB.import[0],
+      'macro-import-src', d?.source?.pharma_import || _FB.import[1]);
+  };
+
+  // 즉시 폴백 표시 후 API로 갱신
+  _apply(null);
   try {
     const res  = await fetch('/api/cl/macro');
     const data = await res.json();
-    _setMacro('macro-gdp',    `$${(data.gdp_per_capita_usd || 17093).toLocaleString()}`, 'macro-gdp-src',    data.source?.gdp    || 'IMF WEO 2024');
-    _setMacro('macro-pop',    `${data.population_m || 19.82}M명`,                        'macro-pop-src',    data.source?.population || 'UN WPP 2024');
-    _setMacro('macro-pharma', `$${data.pharma_market_usd_m || 3100}M`,                  'macro-pharma-src', data.source?.pharma_market || 'IQVIA 2024');
-    _setMacro('macro-growth', `${data.real_growth_pct || 2.5}%`,                        'macro-growth-src', data.source?.growth || 'IMF 2024');
-  } catch (_) {
-    _setMacro('macro-gdp',    '$17,093', 'macro-gdp-src',    'IMF WEO 2024');
-    _setMacro('macro-pop',    '19.82M명', 'macro-pop-src',   'UN WPP 2024');
-    _setMacro('macro-pharma', '$3,100M', 'macro-pharma-src', 'IQVIA 2024');
-    _setMacro('macro-growth', '2.5%',   'macro-growth-src', 'IMF 2024');
-  }
+    _apply(data);
+  } catch (_) { /* 폴백 유지 */ }
 }
 
 function _setMacro(valId, val, srcId, src) {
@@ -343,15 +363,16 @@ function _addReportEntry(result, pdfName) {
   const reports = _loadReports();
   const productName = result ? (result.trade_name || result.product_id || '알 수 없음') : '알 수 없음';
   const entry   = {
-    id:        Date.now(),
-    product:   productName,
-    stage_label: '시장조사',
-    report_title: `시장조사 보고서 - ${productName}`,
-    inn:       result ? (INN_MAP[result.product_id] || result.inn || '') : '',
-    verdict:   result ? (result.verdict || '—') : '—',
-    price_hint: result ? String(result.price_positioning_pbs || result.cenabast_max_price_clp || '').trim() : '',
+    id:           Date.now(),
+    product:      productName,
+    product_key:  result ? (result.product_id || _currentKey || '') : (_currentKey || ''),
+    stage_label:  '시장조사 보고서',
+    report_title: `시장조사 보고서 · ${productName}`,
+    inn:          result ? (INN_MAP[result.product_id] || result.inn || '') : '',
+    verdict:      result ? (result.verdict || '—') : '—',
+    price_hint:   result ? String(result.price_positioning_pbs || result.cenabast_max_price_clp || '').trim() : '',
     clp_price_hint: result ? (result.cenabast_max_price_clp ?? result.mercado_price_clp ?? null) : null,
-    basis_trade: result ? String(result.basis_trade || '').trim() : '',
+    basis_trade:  result ? String(result.basis_trade || '').trim() : '',
     risks_conditions: result ? String(result.risks_conditions || '').trim() : '',
     timestamp: new Date().toLocaleString('ko-KR', {
       month: '2-digit', day: '2-digit',
@@ -434,7 +455,7 @@ function renderReportTab() {
 let _p2Ready = false;
 let _p2Tab = 'ai';
 let _p2ManualSeg = 'public';
-let _p2AiSeg = 'public';
+let _p2AiSeg = 'public';          // 현재 탭 뷰 (public | private)
 let _p2SelectedReportId = '';
 let _p2AiSelectedReportId = '';
 let _p2UploadedReportFilename = '';
@@ -442,6 +463,14 @@ let _p2AiPollTimer = null;
 let _p2Manual = _makeP2Defaults();
 let _p2LastScenarios = null;
 let _p2ManualCalculated = false;
+
+// 듀얼 마켓 결과 저장 (AI 분석 완료 후)
+let _p2BothResults = null;  // { public: {...}, private: {...}, extracted: {}, exchange_rates: {} }
+
+// FOB 모달 상태
+let _fobModalState = null;  // { tier, seg, baseUsd, elements, aiDefaults, refClp, refUsd, usdClp, usdKrw }
+const _FOB_TIER_LABELS = { agg: '저가 진입', avg: '기준가', cons: '프리미엄' };
+const _FOB_TIER_IDX    = { agg: 0, avg: 1, cons: 2 };
 
 function _makeP2Defaults() {
   return {
@@ -497,12 +526,32 @@ function setP2AiSeg(seg) {
   _p2AiSeg = seg === 'private' ? 'private' : 'public';
   document.getElementById('p2-ai-seg-public')?.classList.toggle('on', _p2AiSeg === 'public');
   document.getElementById('p2-ai-seg-private')?.classList.toggle('on', _p2AiSeg === 'private');
-  const desc = document.getElementById('p2-ai-seg-desc');
+
+  const desc    = document.getElementById('p2-ai-seg-desc');
+  const warning = document.getElementById('p2-seg-warning');
+  const warnTxt = document.getElementById('p2-seg-warning-text');
+
   if (desc) {
     desc.textContent = _p2AiSeg === 'public'
-      ? '공공 시장: Mercado Público / CENABAST 채널 · Ley 21.198 소매 상한가 적용'
-      : '민간 시장: Cruz Verde · Salcobrand · Farmacias Ahumada 소매 체인 기준';
+      ? 'Mercado Público / CENABAST 채널 · Ley 21.198 소매 상한가 기준 역산'
+      : 'Cruz Verde · Salcobrand · Farmacias Ahumada 소매 체인 · IVA 19% + 유통마진 기준 역산';
   }
+
+  // 공공/민간 비교 주의사항
+  if (warning && warnTxt) {
+    if (_p2AiSeg === 'public') {
+      warnTxt.textContent =
+        'CENABAST 낙찰가는 민간 소매가보다 낮은 경우가 많지만, 정책 입찰 품목·공급 조건에 따라 민간 시장가보다 높게 형성될 수 있습니다. 두 채널을 모두 검토하세요.';
+      warning.style.display = 'flex';
+    } else {
+      warnTxt.textContent =
+        '민간 소매가는 약국 체인의 자체 마진 정책에 따라 편차가 크며, 공공 채널(CENABAST) 납품가와 별도로 협상됩니다. 약가 규제 이외의 추가 마진이 반영됩니다.';
+      warning.style.display = 'flex';
+    }
+  }
+
+  // 결과가 이미 로드돼 있으면 해당 세그먼트 뷰로 즉시 전환
+  if (_p2BothResults) _renderP2ForSeg(_p2AiSeg);
 }
 
 async function handleP2FileSelect(inputEl) {
@@ -637,7 +686,7 @@ async function runP2AiPipeline() {
     const res = await fetch('/api/p2/pipeline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ report_filename: reportFilename, market: _p2AiSeg }),
+      body: JSON.stringify({ report_filename: reportFilename }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
@@ -796,30 +845,36 @@ function updateP2ColOption(col, optId, newVal) {
 
 function _renderP2AiResult(data) {
   const extracted = data?.extracted || {};
-  const analysis = data?.analysis || {};
   const rates = data?.exchange_rates || {};
-  const scenarios = Array.isArray(analysis.scenarios) ? analysis.scenarios : [];
   const resultSection = document.getElementById('p2-ai-result-section');
   if (resultSection) resultSection.style.display = '';
 
-  // 제품명
+  // ── 듀얼 마켓 결과 저장 ──────────────────────────────────
+  // 서버가 data.public / data.private 로 각 시장 결과를 전송.
+  // 구버전 호환: data.analysis 폴백.
+  _p2BothResults = {
+    public:  data?.public  || data?.analysis || {},
+    private: data?.private || data?.analysis || {},
+    extracted,
+    exchange_rates: rates,
+  };
+
+  // ── 공통 필드 업데이트 ────────────────────────────────────
   _setText('p2r-product-name', extracted.product_name || '미상');
 
-  // 판정 배지 (시장조사 스타일)
   const verdictEl = document.getElementById('p2r-verdict-badge');
   if (verdictEl) {
-    const v = extracted.verdict || '미상';
+    const v  = extracted.verdict || '미상';
     const vc = v === '적합' ? 'v-ok' : v === '부적합' ? 'v-err' : v !== '미상' ? 'v-warn' : 'v-none';
     verdictEl.className = `verdict-badge ${vc}`;
     verdictEl.textContent = v;
   }
 
-  // 참조 정보
   const refClpDisplay = extracted.ref_price_clp
     ? `CLP ${Number(extracted.ref_price_clp).toLocaleString('ko-KR')}`
     : (extracted.ref_price_usd ? `USD ${Number(extracted.ref_price_usd).toFixed(2)}` : '');
-  _setText('p2r-ref-price-text',
-    extracted.ref_price_text || refClpDisplay || '추출값 없음');
+  _setText('p2r-ref-price-text', extracted.ref_price_text || refClpDisplay || '추출값 없음');
+
   const usdClpRate = rates.usd_clp || (rates.clp_usd ? 1 / rates.clp_usd : 0);
   const usdKrwRate = rates.usd_krw;
   let rateText = '환율 정보 없음';
@@ -829,41 +884,7 @@ function _renderP2AiResult(data) {
   }
   _setText('p2r-exchange', rateText);
 
-  // 최종 권고가 (CLP + USD 병기)
-  const finalClp = analysis.final_price_clp || 0;
-  const finalUsd = analysis.final_price_usd || 0;
-  _setText('p2r-final-price', finalClp > 0
-    ? `CLP ${Number(finalClp).toLocaleString('ko-KR')} ≈ FOB USD ${Number(finalUsd).toFixed(2)}`
-    : `FOB USD ${Number(finalUsd).toFixed(2)}`);
-
-  // 시나리오
-  const scenEl = document.getElementById('p2r-scenarios');
-  if (scenEl) {
-    if (scenarios.length) {
-      scenEl.innerHTML = scenarios.map((s, idx) => {
-        const cls = idx === 0 ? 'agg' : idx === 1 ? 'avg' : 'cons';
-        const clpVal = Number(s.price_clp || 0);
-        const usdVal = Number(s.price_usd || 0);
-        const priceDisplay = clpVal > 0
-          ? `CLP ${clpVal.toLocaleString('ko-KR')} ≈ USD ${usdVal.toFixed(2)}`
-          : `USD ${usdVal.toFixed(2)}`;
-        return `
-          <div class="p2-scenario p2-scenario--${cls}">
-            <div class="p2-scenario-top">
-              <span class="p2-scenario-name">${_escHtml(String(s.name || `시나리오 ${idx + 1}`))}</span>
-              <span class="p2-scenario-price">${priceDisplay}</span>
-            </div>
-          </div>`;
-      }).join('');
-    } else {
-      scenEl.innerHTML = '<div class="p2-note">시나리오 데이터가 없습니다.</div>';
-    }
-  }
-
-  // 산정 이유
-  _setText('p2r-rationale', analysis.rationale || '산정 이유 없음');
-
-  // 다운로드
+  // PDF 다운로드
   const dlState = document.getElementById('p2-report-dl-state');
   if (dlState) {
     if (data?.pdf) {
@@ -876,52 +897,7 @@ function _renderP2AiResult(data) {
     }
   }
 
-  // ── 3열 시나리오 UI 채우기 ──────────────────────────────
-  const usdClp2 = rates.usd_clp ? Number(rates.usd_clp) : (rates.clp_usd ? 1 / Number(rates.clp_usd) : 932);
-  const usdKrw2 = rates.usd_krw ? Number(rates.usd_krw) : 1393;
-
-  const cols = ['agg', 'avg', 'cons'];
-  scenarios.forEach((s, i) => {
-    const col     = cols[i];
-    if (!col) return;
-    const priceUsd = Number(s.price_usd || 0);
-    const priceClp = Number(s.price_clp || (priceUsd * usdClp2));
-    _p2ScenarioRaw[col]     = priceUsd;
-    _p2ScenarioRaw.sgd_usd  = 1;       // 하위호환 (recalcP2Col에서 사용)
-    _p2ScenarioRaw.sgd_krw  = usdKrw2; // USD 기준으로 통일
-
-    const refBase = extracted.ref_price_clp != null ? Number(extracted.ref_price_clp) : 0;
-    const refLabel = refBase > 0
-      ? `Retail base: CLP ${(refBase * (i === 0 ? 0.85 : i === 1 ? 1.0 : 1.15)).toLocaleString('ko-KR')}`
-      : `Retail base: — CLP`;
-
-    const priceEl = document.getElementById('p2c-price-' + col);
-    const subEl   = document.getElementById('p2c-sub-' + col);
-    const refEl   = document.getElementById('p2c-ref-' + col);
-    const baseInput = document.getElementById('p2ci-base-' + col);
-
-    if (refEl)     refEl.textContent   = refLabel;
-    if (priceEl)   priceEl.textContent = priceUsd.toFixed(2);
-    if (baseInput) baseInput.value     = priceUsd.toFixed(2);
-    if (subEl) {
-      const krw = usdKrw2 > 0 ? Math.round(priceUsd * usdKrw2).toLocaleString('ko-KR') : '—';
-      const clpDisp = priceClp > 0 ? `CLP ${Math.round(priceClp).toLocaleString('ko-KR')}` : '—';
-      subEl.textContent = `${clpDisp} · ${krw} KRW`;
-    }
-    // Reset custom options for each column on new AI result
-    _p2ColData[col] = { opts: [] };
-    renderP2ColOptions(col, false);
-  });
-
-  // FOB USD 분포
-  if (scenarios.length >= 3) {
-    const prices = scenarios.map(s => Number(s.price_usd || 0)).sort((a, b) => a - b);
-    _setText('p2-dist-p25', `USD ${prices[0].toFixed(2)}`);
-    _setText('p2-dist-med', `USD ${prices[1].toFixed(2)}`);
-    _setText('p2-dist-p75', `USD ${prices[2].toFixed(2)}`);
-  }
-
-  // 제품 목록 (추출된 product_name 기준)
+  // 제품 목록
   const prodList = document.getElementById('p2-product-list');
   if (prodList && extracted.product_name) {
     prodList.innerHTML = `
@@ -935,6 +911,365 @@ function _renderP2AiResult(data) {
           </tr>
         </tbody>
       </table>`;
+  }
+
+  // ── 현재 탭 세그먼트 렌더 ────────────────────────────────
+  _renderP2ForSeg(_p2AiSeg);
+}
+
+/**
+ * 저장된 _p2BothResults 에서 특정 시장(seg)의 데이터를 읽어 UI를 갱신.
+ * setP2AiSeg() 탭 전환 시에도 호출된다.
+ * @param {'public'|'private'} seg
+ */
+function _renderP2ForSeg(seg) {
+  if (!_p2BothResults) return;
+  const marketData = _p2BothResults[seg] || _p2BothResults.public || {};
+  const extracted  = _p2BothResults.extracted || {};
+  const rates      = _p2BothResults.exchange_rates || {};
+  const scenarios  = Array.isArray(marketData.scenarios) ? marketData.scenarios : [];
+
+  const usdClp = rates.usd_clp ? Number(rates.usd_clp) : (rates.clp_usd ? 1 / Number(rates.clp_usd) : 932);
+  const usdKrw = rates.usd_krw ? Number(rates.usd_krw) : 1393;
+
+  // analysis 는 중첩 구조: marketData.analysis (Haiku 응답) 또는 marketData 직접 (폴백)
+  const analysis = marketData.analysis || marketData;
+
+  // 최종 권고가
+  const finalClp = analysis.final_price_clp || marketData.final_price_clp || 0;
+  const finalUsd = analysis.final_price_usd || marketData.final_price_usd || 0;
+  _setText('p2r-final-price', finalClp > 0
+    ? `CLP ${Number(finalClp).toLocaleString('ko-KR')} ≈ FOB USD ${Number(finalUsd).toFixed(2)}`
+    : `FOB USD ${Number(finalUsd).toFixed(2)}`);
+
+  // 산정 이유
+  _setText('p2r-rationale', analysis.rationale || marketData.rationale || '산정 이유 없음');
+
+  // 시나리오 목록 (#p2r-scenarios)
+  const scenEl = document.getElementById('p2r-scenarios');
+  if (scenEl) {
+    const tierKeys = ['agg', 'avg', 'cons'];
+    if (scenarios.length) {
+      scenEl.innerHTML = scenarios.map((s, idx) => {
+        const cls      = tierKeys[idx] || 'cons';
+        const label    = _FOB_TIER_LABELS[cls] || String(s.name || `시나리오 ${idx + 1}`);
+        const clpVal   = Number(s.price_clp || 0);
+        const usdVal   = Number(s.price_usd || 0);
+        const priceDisp = clpVal > 0
+          ? `CLP ${clpVal.toLocaleString('ko-KR')} ≈ USD ${usdVal.toFixed(2)}`
+          : `USD ${usdVal.toFixed(2)}`;
+        return `
+          <div class="p2-scenario p2-scenario--${cls}">
+            <div class="p2-scenario-top">
+              <span class="p2-scenario-name">${_escHtml(label)}</span>
+              <span class="p2-scenario-price">${priceDisp}</span>
+            </div>
+          </div>`;
+      }).join('');
+    } else {
+      scenEl.innerHTML = '<div class="p2-note">시나리오 데이터가 없습니다.</div>';
+    }
+  }
+
+  // ── 3열 가격 카드 채우기 ──────────────────────────────────
+  const cols = ['agg', 'avg', 'cons'];
+  scenarios.forEach((s, i) => {
+    const col = cols[i];
+    if (!col) return;
+    const priceUsd = Number(s.price_usd || 0);
+    const priceClp = Number(s.price_clp || (priceUsd * usdClp));
+    _p2ScenarioRaw[col]    = priceUsd;
+    _p2ScenarioRaw.sgd_usd = 1;
+    _p2ScenarioRaw.sgd_krw = usdKrw;
+
+    const refBase  = extracted.ref_price_clp != null ? Number(extracted.ref_price_clp) : 0;
+    const refLabel = refBase > 0
+      ? `Retail base: CLP ${(refBase * (i === 0 ? 0.85 : i === 1 ? 1.0 : 1.15)).toLocaleString('ko-KR')}`
+      : `Retail base: — CLP`;
+
+    const priceEl   = document.getElementById('p2c-price-' + col);
+    const subEl     = document.getElementById('p2c-sub-' + col);
+    const refEl     = document.getElementById('p2c-ref-' + col);
+    const baseInput = document.getElementById('p2ci-base-' + col);
+
+    if (refEl)     refEl.textContent   = refLabel;
+    if (priceEl)   priceEl.textContent = priceUsd.toFixed(2);
+    if (baseInput) baseInput.value     = priceUsd.toFixed(2);
+    if (subEl) {
+      const krw     = usdKrw > 0 ? Math.round(priceUsd * usdKrw).toLocaleString('ko-KR') : '—';
+      const clpDisp = priceClp > 0 ? `CLP ${Math.round(priceClp).toLocaleString('ko-KR')}` : '—';
+      subEl.textContent = `${clpDisp} · ${krw} KRW`;
+    }
+    _p2ColData[col] = { opts: [] };
+    renderP2ColOptions(col, false);
+  });
+
+  // ── 가격 요약 테이블 ──────────────────────────────────────
+  const tableBody = document.getElementById('p2-price-table-body');
+  if (tableBody) {
+    const labels  = ['저가 진입', '기준가', '프리미엄'];
+    const classes = ['badge-agg', 'badge-avg', 'badge-cons'];
+    tableBody.innerHTML = scenarios.slice(0, 3).map((s, i) => {
+      const pUsd = Number(s.price_usd || 0);
+      const pClp = Number(s.price_clp || (pUsd * usdClp));
+      const pKrw = usdKrw > 0 ? Math.round(pUsd * usdKrw) : 0;
+      return `<tr>
+        <td class="col-scenario ${classes[i]}">${labels[i]}</td>
+        <td class="col-clp">CLP ${pClp > 0 ? Math.round(pClp).toLocaleString('ko-KR') : '—'}</td>
+        <td class="col-usd">$ ${pUsd > 0 ? pUsd.toFixed(2) : '—'}</td>
+        <td class="col-krw">${pKrw > 0 ? pKrw.toLocaleString('ko-KR') + '원' : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── FOB 분포 ──────────────────────────────────────────────
+  if (scenarios.length >= 3) {
+    const prices = scenarios.map(s => Number(s.price_usd || 0)).sort((a, b) => a - b);
+    _setText('p2-dist-p25', `USD ${prices[0].toFixed(2)}`);
+    _setText('p2-dist-med', `USD ${prices[1].toFixed(2)}`);
+    _setText('p2-dist-p75', `USD ${prices[2].toFixed(2)}`);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   §P2-FOB. FOB 역산 계산기 모달
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/** AI 기본 공식 요소 (서버 _CL_FOB_ELEMENTS_* 와 동일) */
+const _FOB_DEFAULTS = {
+  public: [
+    { key: 'agent_fee',       label: '에이전트 수수료',    value: 5,   unit: '%',   type: 'pct_deduct' },
+    { key: 'freight',         label: '운임 배수',          value: 1.0, unit: '×배수', type: 'mult' },
+    { key: 'procurement_fee', label: '조달청 입찰 수수료', value: 3,   unit: '%',   type: 'pct_deduct' },
+    { key: 'gpo_discount',    label: 'GPO 물량 할인율',    value: 2,   unit: '%',   type: 'pct_deduct' },
+  ],
+  private: [
+    { key: 'agent_fee',          label: '에이전트 수수료',      value: 5,   unit: '%',   type: 'pct_deduct' },
+    { key: 'freight',            label: '운임 배수',            value: 1.0, unit: '×배수', type: 'mult' },
+    { key: 'pharma_margin',      label: '병원·약국 유통 마진',  value: 15,  unit: '%',   type: 'pct_deduct' },
+    { key: 'distributor_markup', label: '유통사 마크업',        value: 8,   unit: '%',   type: 'pct_add' },
+  ],
+};
+
+/**
+ * 공식 요소 목록의 combined factor 계산.
+ * base_usd × product = final FOB USD
+ */
+function _elementsProduct(elements) {
+  let p = 1.0;
+  for (const e of elements) {
+    const v = Number(e.value) || 0;
+    if      (e.type === 'pct_deduct') p *= (1 - v / 100);
+    else if (e.type === 'pct_add')   p *= (1 + v / 100);
+    else if (e.type === 'mult')      p *= v;
+  }
+  return p;
+}
+
+/**
+ * FOB 역산 모달 열기.
+ * @param {'agg'|'avg'|'cons'} tier
+ */
+function openFobModal(tier) {
+  if (!_p2BothResults) {
+    alert('먼저 AI 가격 산출을 실행해 주세요.');
+    return;
+  }
+  const seg        = _p2AiSeg;
+  const marketData = _p2BothResults[seg] || {};
+  const scenarios  = Array.isArray(marketData.scenarios) ? marketData.scenarios : [];
+  const idx        = _FOB_TIER_IDX[tier];
+  if (idx === undefined || idx >= scenarios.length) return;
+
+  const s      = scenarios[idx];
+  const rates  = _p2BothResults.exchange_rates || {};
+  const extr   = _p2BothResults.extracted || {};
+  const usdClp = rates.usd_clp ? Number(rates.usd_clp) : (rates.clp_usd ? 1 / Number(rates.clp_usd) : 932);
+  const usdKrw = rates.usd_krw ? Number(rates.usd_krw) : 1393;
+
+  // 공식 요소 딥카피
+  const aiDefs   = (_FOB_DEFAULTS[seg] || _FOB_DEFAULTS.public).map(e => ({ ...e }));
+  const elements = aiDefs.map(e => ({ ...e }));
+
+  // base_usd: price_usd ÷ elements_product (역산)
+  const priceUsd = Number(s.price_usd || 0);
+  const product  = _elementsProduct(elements);
+  const baseUsd  = product > 0 ? priceUsd / product : priceUsd;
+
+  _fobModalState = {
+    tier,
+    seg,
+    baseUsd,
+    elements,
+    aiDefaults: aiDefs,
+    refClp:  extr.ref_price_clp  ? Number(extr.ref_price_clp)  : null,
+    refUsd:  extr.ref_price_usd  ? Number(extr.ref_price_usd)  : null,
+    usdClp,
+    usdKrw,
+  };
+
+  // 타이틀: "기준가 — 역산 · 옵션 편집 [공공 시장]"
+  const _segLabel = seg === 'public' ? '공공 시장' : '민간 시장';
+  const titleEl = document.getElementById('fob-modal-title');
+  if (titleEl) titleEl.textContent = `${_FOB_TIER_LABELS[tier] || tier} — 역산 · 옵션 편집 [${_segLabel}]`;
+
+  // 보고서 참조가: "CLP 12,345 ≈ 13.27 USD" (현지 통화 선행)
+  const refEl = document.getElementById('fob-ref-display');
+  if (refEl) {
+    const rc = _fobModalState.refClp;
+    const ru = _fobModalState.refUsd;
+    const _usdClp = _fobModalState.usdClp || 932;
+    if (rc && rc > 0) {
+      const usdEquiv = ru || (rc / _usdClp);
+      refEl.textContent = `CLP ${Number(rc).toLocaleString('ko-KR')} ≈ ${usdEquiv.toFixed(2)} USD`;
+    } else if (ru && ru > 0) {
+      const clpEquiv = ru * _usdClp;
+      refEl.textContent = `CLP ${Math.round(clpEquiv).toLocaleString('ko-KR')} ≈ ${Number(ru).toFixed(2)} USD`;
+    } else {
+      refEl.textContent = '—';
+    }
+  }
+
+  // 기준가 입력
+  const baseInput = document.getElementById('fob-base-usd');
+  if (baseInput) baseInput.value = baseUsd.toFixed(4);
+
+  renderFobElements();
+  recalcFobModal();
+
+  document.getElementById('fob-modal-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+/** FOB 모달 닫기 (오버레이 클릭 또는 ✕ 버튼) */
+function closeFobModal(e) {
+  if (e && e.target !== document.getElementById('fob-modal-overlay')) return;
+  document.getElementById('fob-modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+/** 공식 요소 목록을 #fob-elements-list 에 렌더링 */
+function renderFobElements() {
+  if (!_fobModalState) return;
+  const container = document.getElementById('fob-elements-list');
+  if (!container) return;
+
+  container.innerHTML = _fobModalState.elements.map((e, i) => `
+    <div class="fob-elem-row">
+      <input class="fob-elem-name" type="text" value="${_escHtml(String(e.label))}"
+        oninput="updateFobElement(${i},'label',this.value)">
+      <select class="fob-elem-type" onchange="updateFobElement(${i},'type',this.value)">
+        <option value="pct_deduct" ${e.type === 'pct_deduct' ? 'selected' : ''}>% 차감</option>
+        <option value="pct_add"    ${e.type === 'pct_add'    ? 'selected' : ''}>% 가산</option>
+        <option value="mult"       ${e.type === 'mult'       ? 'selected' : ''}>× 배수</option>
+      </select>
+      <input class="fob-elem-val" type="number" value="${e.value}" step="0.1" min="0"
+        oninput="updateFobElement(${i},'value',this.value)">
+      <button class="fob-elem-del" onclick="removeFobElement(${i})">×</button>
+    </div>`).join('');
+}
+
+/**
+ * 요소 필드 수정.
+ * @param {number} idx
+ * @param {'label'|'type'|'value'} field
+ * @param {string} val
+ */
+function updateFobElement(idx, field, val) {
+  if (!_fobModalState) return;
+  const e = _fobModalState.elements[idx];
+  if (!e) return;
+  if (field === 'value') e.value = parseFloat(val) || 0;
+  else e[field] = val;
+  recalcFobModal();
+}
+
+/**
+ * 요소 삭제.
+ * @param {number} idx
+ */
+function removeFobElement(idx) {
+  if (!_fobModalState) return;
+  _fobModalState.elements.splice(idx, 1);
+  renderFobElements();
+  recalcFobModal();
+}
+
+/** 새 요소 추가 행 확정 */
+function confirmFobElement() {
+  if (!_fobModalState) return;
+  const name = (document.getElementById('fob-new-name')?.value || '').trim();
+  const type = document.getElementById('fob-new-type')?.value || 'pct_deduct';
+  const val  = parseFloat(document.getElementById('fob-new-val')?.value || '0');
+  if (!name || Number.isNaN(val) || val < 0) return;
+
+  _fobModalState.elements.push({
+    key:   'custom_' + Date.now(),
+    label: name,
+    value: val,
+    unit:  type === 'mult' ? '×배수' : '%',
+    type,
+  });
+
+  const nameEl = document.getElementById('fob-new-name');
+  const valEl  = document.getElementById('fob-new-val');
+  if (nameEl) nameEl.value = '';
+  if (valEl)  valEl.value  = '';
+
+  renderFobElements();
+  recalcFobModal();
+}
+
+/** AI 추천 기본값으로 초기화 */
+function resetFobToAi() {
+  if (!_fobModalState) return;
+  _fobModalState.elements = _fobModalState.aiDefaults.map(e => ({ ...e }));
+
+  // base_usd 도 AI 역산값으로 복원
+  const seg        = _fobModalState.seg;
+  const tier       = _fobModalState.tier;
+  const marketData = _p2BothResults?.[seg] || {};
+  const scenarios  = Array.isArray(marketData.scenarios) ? marketData.scenarios : [];
+  const s          = scenarios[_FOB_TIER_IDX[tier]];
+  if (s) {
+    const priceUsd = Number(s.price_usd || 0);
+    const product  = _elementsProduct(_fobModalState.elements);
+    _fobModalState.baseUsd = product > 0 ? priceUsd / product : priceUsd;
+    const baseInput = document.getElementById('fob-base-usd');
+    if (baseInput) baseInput.value = _fobModalState.baseUsd.toFixed(4);
+  }
+
+  renderFobElements();
+  recalcFobModal();
+}
+
+/** 기준가 또는 요소 변경 시 결과 재계산 */
+function recalcFobModal() {
+  if (!_fobModalState) return;
+  const baseUsd = parseFloat(document.getElementById('fob-base-usd')?.value || '0') || 0;
+  _fobModalState.baseUsd = baseUsd;
+
+  const product   = _elementsProduct(_fobModalState.elements);
+  const resultUsd = baseUsd * product;
+  const resultClp = resultUsd * (_fobModalState.usdClp || 932);
+
+  // 모달 결과 라인 업데이트
+  const resultEl = document.getElementById('fob-result-line');
+  if (resultEl) {
+    resultEl.textContent =
+      `결과: USD ${resultUsd.toFixed(4)} · CLP ${Math.round(resultClp).toLocaleString('ko-KR')}`;
+  }
+
+  // 해당 가격 카드 실시간 반영
+  const col     = _fobModalState.tier;
+  const priceEl = document.getElementById('p2c-price-' + col);
+  const subEl   = document.getElementById('p2c-sub-' + col);
+  if (priceEl) priceEl.textContent = resultUsd.toFixed(2);
+  if (subEl) {
+    const krw     = _fobModalState.usdKrw > 0
+      ? Math.round(resultUsd * _fobModalState.usdKrw).toLocaleString('ko-KR')
+      : '—';
+    subEl.textContent = `CLP ${Math.round(resultClp).toLocaleString('ko-KR')} · ${krw} KRW`;
   }
 }
 
@@ -965,8 +1300,19 @@ function _p2FillBaseFromReport() {
 function _syncP2ReportsOptions() {
   if (!_p2Ready) return;
   const reports = _loadReports();
-  const optionHtml = ['<option value="">보고서를 선택하세요</option>']
-    .concat(reports.map((r) => `<option value="${r.id}">${_escHtml(r.report_title || r.product || '보고서')}</option>`))
+
+  // 옵션 라벨: "시장조사 보고서 · ProductName · YYYY-MM-DD HH:MM"
+  function _reportLabel(r) {
+    const title  = r.stage_label || '시장조사 보고서';
+    const prod   = r.product || '알 수 없음';
+    const ts     = r.created_at
+      ? new Date(r.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      : '';
+    return ts ? `${title} · ${prod} · ${ts}` : `${title} · ${prod}`;
+  }
+
+  const optionHtml = ['<option value="">시장조사 보고서를 선택하세요.</option>']
+    .concat(reports.map((r) => `<option value="${r.id}">${_escHtml(_reportLabel(r))}</option>`))
     .join('');
 
   const manualSelect = document.getElementById('p2-report-select');
@@ -985,6 +1331,13 @@ function _syncP2ReportsOptions() {
     aiSelect.value = _p2AiSelectedReportId;
   }
 
+  // [02] 바이어 발굴 패널 — p3-report-select 동기화
+  const p3Select = document.getElementById('p3-report-select');
+  if (p3Select) {
+    const curr = p3Select.value;
+    p3Select.innerHTML = optionHtml;
+    p3Select.value = reports.some((r) => String(r.id) === String(curr)) ? curr : '';
+  }
 }
 
 function _getP2SelectedReport() {
@@ -1665,6 +2018,40 @@ function _showReportLoading() {
   document.getElementById('report-card').classList.add('visible');
 }
 
+/** 합본 보고서 (표지 + P1 + P2 + P3) 생성 */
+async function generateCombinedReport() {
+  const btn = document.getElementById('btn-combined-report');
+  if (btn) { btn.disabled = true; btn.textContent = '생성 중…'; }
+  try {
+    const productSel = document.getElementById('product-select');
+    const productKey = productSel?.value || _currentKey || '';
+    const productName = productSel?.options[productSel.selectedIndex]?.text?.split('—')[0]?.trim()
+                        || productKey || '칠레 수출 품목';
+    const res = await fetch('/api/cl/report/combined', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_name:    productName,
+        inn_label:       '',
+        country:         '칠레',
+        use_latest_pdfs: true,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok && data.pdf) {
+      const url = `/api/report/download?name=${encodeURIComponent(data.pdf)}`;
+      window.open(url, '_blank');
+    } else {
+      alert('합본 보고서 생성 실패. 각 단계(1공정·2공정·3공정) 분석을 먼저 실행하세요.');
+    }
+  } catch (e) {
+    console.error('합본 보고서 생성 오류:', e);
+    alert('합본 보고서 생성 중 오류가 발생했습니다.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📋 합본 보고서'; }
+  }
+}
+
 /** U4: PDF 생성 완료 */
 function _showReportOk(pdfName) {
   const dl = document.querySelector('#report-state-ok .btn-download');
@@ -1802,13 +2189,18 @@ async function loadNews() {
     }
 
     listEl.innerHTML = data.items.map(item => {
-      const href   = item.link ? `href="${_escHtml(item.link)}" target="_blank" rel="noopener"` : '';
-      const tag    = item.link ? 'a' : 'div';
-      const source = [item.source, item.date].filter(Boolean).join(' · ');
+      const href    = item.link ? `href="${_escHtml(item.link)}" target="_blank" rel="noopener"` : '';
+      const tag     = item.link ? 'a' : 'div';
+      const meta    = [item.source, item.date].filter(Boolean).join(' · ');
+      const yr      = (item.date || '').slice(0, 4);
+      const yrBadge = yr ? `<span class="news-yr-badge ${yr >= '2026' ? 'news-yr-badge--new' : ''}">${yr}</span>` : '';
+      const summary = item.summary
+        ? `<div class="news-summary">${_escHtml(item.summary)}</div>` : '';
       return `
         <${tag} class="irow news-item" ${href} style="${item.link ? 'text-decoration:none;display:block;' : ''}">
-          <div class="tit">${_escHtml(item.title)}</div>
-          ${source ? `<div class="sub">${_escHtml(source)}</div>` : ''}
+          <div class="news-title-row">${yrBadge}<span class="tit">${_escHtml(item.title)}</span></div>
+          ${summary}
+          ${meta ? `<div class="sub">${_escHtml(meta)}</div>` : ''}
         </${tag}>`;
     }).join('');
   } catch (e) {
@@ -1866,16 +2258,25 @@ function _resetP3Progress() {
 }
 
 async function runP3Pipeline() {
-  const btn     = document.getElementById('btn-p3-run');
-  const icon    = document.getElementById('p3-run-icon');
-  const errEl   = document.getElementById('p3-error-msg');
-  const product = document.getElementById('product-select')?.value || 'CL_cilostazol_cr_200';
+  const btn   = document.getElementById('btn-p3-run');
+  const icon  = document.getElementById('p3-run-icon');
+  const errEl = document.getElementById('p3-error-msg');
+
+  // p3-report-select 에서 선택된 보고서의 product_key 우선 사용
+  const p3Select      = document.getElementById('p3-report-select');
+  const p3ReportId    = p3Select?.value || '';
+  const reports       = _loadReports();
+  const selectedReport = p3ReportId ? reports.find((r) => String(r.id) === String(p3ReportId)) : null;
+  const product = selectedReport?.product_key
+    || document.getElementById('product-select')?.value
+    || 'CL_cilostazol_cr_200';
 
   if (btn) btn.disabled = true;
   if (icon) icon.textContent = '…';
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
   _resetP3Progress();
   _setP3Progress('crawl', 'running');
+  _showP3Skeleton();  // 로딩 중 스켈레톤 표시
 
   try {
     const checked = [...document.querySelectorAll('.p3-cb:checked')].map(cb => cb.value);
@@ -1923,8 +2324,9 @@ async function _pollP3() {
       _p3PdfName = result.pdf || null;
       _renderP3Cards(_p3Buyers);
       document.getElementById('p3-result-section').style.display = '';
-      const dlBtn = document.getElementById('p3-dl-btn');
-      if (dlBtn && _p3PdfName) dlBtn.disabled = false;
+      // 상단 고정 최종 보고서 버튼 활성화
+      const dlBtnTop = document.getElementById('btn-p3-final-dl');
+      if (dlBtnTop && _p3PdfName) dlBtnTop.disabled = false;
 
       const btn  = document.getElementById('btn-p3-run');
       const icon = document.getElementById('p3-run-icon');
@@ -1946,6 +2348,24 @@ async function _pollP3() {
 }
 
 /** 체크박스 변경 → 서버에 재랭킹 요청 */
+/** 평가 기준 전체 선택 / 전체 해제 */
+function p3CheckAll(checked) {
+  document.querySelectorAll('.p3-cb').forEach(cb => { cb.checked = checked; });
+  p3ReRank();
+}
+
+/** 바이어 발굴 중 스켈레톤 리스트 표시 (Top 10 번호만 보임) */
+function _showP3Skeleton() {
+  const wrap = document.getElementById('p3-cards');
+  if (!wrap) return;
+  wrap.innerHTML = Array.from({ length: 10 }, (_, i) => `
+    <div class="p3-skeleton-row">
+      <span class="p3-skel-rank">${i + 1}</span>
+      <div class="p3-skel-bar" style="width:${55 + Math.random() * 30 | 0}%"></div>
+    </div>`).join('');
+  document.getElementById('p3-result-section').style.display = '';
+}
+
 async function p3ReRank() {
   if (!_p3Buyers.length) return;
   const checked = [...document.querySelectorAll('.p3-cb:checked')].map(cb => cb.value);
@@ -2048,19 +2468,38 @@ function showBuyerDetail(idx) {
   const matched = (b.matched_ingredients || []).join(' · ');
   const territories = (e.territories || []).join(', ');
 
+  // 기업개요 · 채택이유 텍스트 준비
+  const overview = e.company_overview_kr || e.summary || '';
+  const reason   = e.recommendation_reason || '';
+
+  // 인증 배지 목록
+  const certs = (e.certifications || []);
+  const certHtml = certs.length
+    ? certs.map(c => `<span class="bm-cert">${_escHtml(c)}</span>`).join(' ')
+    : '';
+
   document.getElementById('buyer-modal-body').innerHTML = `
     <div class="bm-header">
       <div class="bm-rank">${rankEmoji[idx] || (idx+1)+'위'}</div>
       <div class="bm-title">
         <div class="bm-name">${_escHtml(b.company_name || '-')}</div>
-        <div class="bm-meta">${_escHtml(b.country || '-')} · ${_escHtml(b.category || '-')}
+        <div class="bm-meta">
+          ${_escHtml(b.country || '-')} · ${_escHtml(b.category || '-')}
           <span class="p3-tag ${priClass}" style="margin-left:6px;">${priLabel}</span>
           <span class="bm-score">${(b.composite_score||0).toFixed(1)}점</span>
         </div>
       </div>
     </div>
 
-    ${e.summary && e.summary !== '-' ? `<div class="bm-summary">${_escHtml(e.summary)}</div>` : ''}
+    ${overview && overview !== '-' ? `
+    <div class="bm-section">기업 개요</div>
+    <div class="bm-overview">${_escHtml(overview)}</div>
+    ` : ''}
+
+    ${reason && reason !== '-' ? `
+    <div class="bm-section">채택 이유</div>
+    <div class="bm-reason">${_escHtml(reason)}</div>
+    ` : ''}
 
     <div class="bm-section">연락처</div>
     <table class="bm-table">
@@ -2078,6 +2517,7 @@ function showBuyerDetail(idx) {
       ${row('임직원 수', e.employees)}
       ${row('설립연도', e.founded)}
       ${territories ? `<tr><th>사업 지역</th><td>${_escHtml(territories)}</td></tr>` : ''}
+      ${certHtml ? `<tr><th>인증</th><td>${certHtml}</td></tr>` : ''}
     </table>
 
     <div class="bm-section">역량 · 실적</div>
@@ -2098,7 +2538,11 @@ function showBuyerDetail(idx) {
 
     ${matched ? `<div class="bm-section">성분 매칭</div><div class="bm-match">🧪 ${_escHtml(matched)}</div>` : ''}
 
-    ${sources ? `<div class="bm-section">출처</div><div class="bm-sources">${sources}</div>` : ''}
+    ${sources ? `
+    <div class="bm-section">출처</div>
+    <div class="bm-sources bm-sources-label">Perplexity 분석</div>
+    <div class="bm-sources">${sources}</div>
+    ` : ''}
   `;
 
   const overlay = document.getElementById('buyer-modal-overlay');

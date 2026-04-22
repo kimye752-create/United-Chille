@@ -7,6 +7,9 @@ API 문서: https://api.mercadopublico.cl/
 주요 엔드포인트:
   GET /servicios/v1/publico/licitaciones.json  — 입찰 목록
   GET /servicios/v1/publico/licitaciones/{codigo}  — 입찰 상세
+
+개선 사항 (v2):
+  - cl_backoff_retry: 비동기 지수 백오프 재시도
 """
 from __future__ import annotations
 
@@ -18,22 +21,42 @@ from typing import Any
 
 import httpx
 
+try:
+    from utils.cl_backoff_retry import async_with_backoff, RetryExhausted
+except ImportError:
+    def async_with_backoff(**kw):  # type: ignore[misc]
+        def deco(f): return f
+        return deco
+    class RetryExhausted(Exception): pass  # type: ignore[misc]
 
-_API_BASE = "https://api.mercadopublico.cl/servicios/v1/publico"
-_LICITACIONES_URL = f"{_API_BASE}/licitaciones.json"
+
+_API_BASE          = "https://api.mercadopublico.cl/servicios/v1/publico"
+_LICITACIONES_URL  = f"{_API_BASE}/licitaciones.json"
 
 _HEADERS = {
-    "User-Agent": "UPharmaExportAI/1.0 (research; contact: kup@example.com)",
-    "Accept": "application/json",
+    "User-Agent": "UPharmaExportAI/2.0 (research; contact: kup@example.com)",
+    "Accept":     "application/json",
 }
 
 # 의약품 HS 코드 관련 키워드
-_PHARMA_KEYWORDS = ["medicamento", "fármaco", "farmaco", "comprimido", "cápsula", "inyectable"]
+_PHARMA_KEYWORDS = [
+    "medicamento", "fármaco", "farmaco", "comprimido",
+    "cápsula", "capsula", "inyectable", "jarabe", "tableta",
+]
 
 
 def _get_ticket_key() -> str:
     """환경변수 MERCADOPUBLICO_API_KEY (미설정 시 공개 엔드포인트 사용)."""
     return os.environ.get("MERCADOPUBLICO_API_KEY", "").strip()
+
+
+@async_with_backoff(max_attempts=3, base=2.0, max_wait=30.0)
+async def _fetch_licitaciones(params: dict, timeout: float) -> httpx.Response:
+    """백오프 재시도 포함 공공 API GET."""
+    async with httpx.AsyncClient(headers=_HEADERS, timeout=timeout) as client:
+        resp = await client.get(_LICITACIONES_URL, params=params)
+        resp.raise_for_status()
+        return resp
 
 
 async def search_tenders(
@@ -43,21 +66,21 @@ async def search_tenders(
 ) -> list[dict[str, Any]]:
     """INN 성분명으로 공공조달 입찰 검색."""
     params: dict[str, Any] = {
-        "nombre": inn_name,
-        "estado": "adjudicada",   # 낙찰 완료된 건만
+        "nombre":   inn_name,
+        "estado":   "adjudicada",   # 낙찰 완료된 건만
         "cantidad": limit,
-        "pagina": 1,
+        "pagina":   1,
     }
     ticket = _get_ticket_key()
     if ticket:
         params["ticket"] = ticket
 
     try:
-        async with httpx.AsyncClient(headers=_HEADERS, timeout=timeout) as client:
-            resp = await client.get(_LICITACIONES_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            return _parse_licitaciones(data, inn_name)
+        resp = await _fetch_licitaciones(params, timeout)
+        data = resp.json()
+        return _parse_licitaciones(data, inn_name)
+    except RetryExhausted as exc:
+        return [{"error": f"재시도 초과: {exc}", "source": "mercadopublico", "inn_name": inn_name}]
     except Exception as exc:
         return [{"error": str(exc), "source": "mercadopublico", "inn_name": inn_name}]
 
@@ -86,11 +109,14 @@ def _parse_licitaciones(data: Any, inn_name: str) -> list[dict[str, Any]]:
             continue
         nombre = lic.get("Nombre") or lic.get("nombre") or ""
         codigo = lic.get("CodigoExterno") or lic.get("codigo") or ""
-        org = lic.get("NombreOrganismo") or lic.get("organismo") or ""
+        org    = lic.get("NombreOrganismo") or lic.get("organismo") or ""
 
         # 의약품 관련 여부 확인
         nombre_lower = nombre.lower()
-        is_pharma = any(kw in nombre_lower for kw in _PHARMA_KEYWORDS) or inn_name.lower() in nombre_lower
+        is_pharma = (
+            any(kw in nombre_lower for kw in _PHARMA_KEYWORDS)
+            or inn_name.lower() in nombre_lower
+        )
         if not is_pharma:
             continue
 
@@ -98,15 +124,18 @@ def _parse_licitaciones(data: Any, inn_name: str) -> list[dict[str, Any]]:
         fecha = str(lic.get("FechaAdjudicacion") or lic.get("fecha") or "")
 
         items.append({
-            "source": "mercadopublico",
-            "inn_name": inn_name,
-            "tender_id": codigo,
-            "buyer_org": org,
-            "tender_name": nombre,
-            "awarded_price_clp": float(monto) if monto else None,
-            "award_date": fecha[:10] if fecha else None,
-            "tender_status": "awarded",
-            "source_url": f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion={codigo}",
+            "source":             "mercadopublico",
+            "inn_name":           inn_name,
+            "tender_id":          codigo,
+            "buyer_org":          org,
+            "tender_name":        nombre,
+            "awarded_price_clp":  float(monto) if monto else None,
+            "award_date":         fecha[:10] if fecha else None,
+            "tender_status":      "awarded",
+            "source_url": (
+                f"https://www.mercadopublico.cl/Procurement/Modules/RFB/"
+                f"DetailsAcquisition.aspx?idlicitacion={codigo}"
+            ),
             "ocds_data": lic,
         })
 

@@ -359,50 +359,17 @@ def build_report(
 
 # ── PDF 렌더링 ────────────────────────────────────────────────────────────────
 
-_FONT_CACHE: str | None = None
-
-
 def _register_korean_font() -> str:
-    """한글 지원 폰트를 등록하고 폰트명을 반환. 등록 실패 시 Helvetica 반환.
+    """공유 폰트 유틸 위임. 레귤러 폰트명 반환."""
+    from utils.pdf_fonts import register as _reg
+    reg, _ = _reg()
+    return reg
 
-    결과를 모듈 레벨에 캐싱하므로 여러 번 호출해도 파일시스템 탐색은 최초 1회만 수행.
-    """
-    global _FONT_CACHE
-    if _FONT_CACHE is not None:
-        return _FONT_CACHE
 
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-    from reportlab.pdfbase.ttfonts import TTFont
-
-    candidates = [
-        # Render/Linux 배포환경 — download_fonts.py 가 빌드 시 받아놓은 파일
-        ("NanumGothic",  str(ROOT / "fonts" / "NanumGothic.ttf")),
-        # macOS 시스템 폰트
-        ("AppleGothic",  "/System/Library/Fonts/Supplemental/AppleGothic.ttf"),
-        ("AppleGothic",  "/Library/Fonts/AppleGothic.ttf"),
-        ("NanumGothic",  "/Library/Fonts/NanumGothic.ttf"),
-        # Windows
-        ("MalgunGothic", "C:/Windows/Fonts/malgun.ttf"),
-    ]
-    for name, path in candidates:
-        if Path(path).is_file():
-            try:
-                pdfmetrics.registerFont(TTFont(name, path))
-                pdfmetrics.registerFont(TTFont(f"{name}-Bold", path))
-                _FONT_CACHE = name
-                return name
-            except Exception:
-                continue
-    try:
-        # ReportLab 내장 CID 폰트 폴백(시스템 TTF 없어도 한글 표시 가능)
-        pdfmetrics.registerFont(UnicodeCIDFont("HYSMyeongJo-Medium"))
-        _FONT_CACHE = "HYSMyeongJo-Medium"
-        return "HYSMyeongJo-Medium"
-    except Exception:
-        pass
-    _FONT_CACHE = "Helvetica"
-    return "Helvetica"
+def _font_pair() -> tuple[str, str]:
+    """(regular, bold) 폰트명 반환."""
+    from utils.pdf_fonts import register as _reg
+    return _reg()
 
 
 def render_pdf(report: dict, out_path: Path) -> None:
@@ -425,10 +392,7 @@ def render_pdf(report: dict, out_path: Path) -> None:
     MARGIN = 20 * mm
     CONTENT_W = W - 2 * MARGIN
 
-    base_font = _register_korean_font()
-    bold_font = f"{base_font}-Bold"
-    if base_font == "HYSMyeongJo-Medium":
-        bold_font = base_font
+    base_font, bold_font = _font_pair()
 
     # ── 템플릿 색상 ────────────────────────────────────────────────────────────
     C_NAVY   = colors.HexColor("#1B2A4A")
@@ -817,10 +781,7 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
     MARGIN = 20 * mm
     CONTENT_W = W - 2 * MARGIN
 
-    base_font = _register_korean_font()
-    bold_font = f"{base_font}-Bold"
-    if base_font == "HYSMyeongJo-Medium":
-        bold_font = base_font
+    base_font, bold_font = _font_pair()
 
     C_NAVY   = colors.HexColor("#1B2A4A")
     C_BODY   = colors.HexColor("#1A1A1A")
@@ -876,48 +837,59 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
         pagesize=A4,
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=MARGIN,  bottomMargin=MARGIN,
-        title="싱가포르 2공정 수출 가격 전략 보고서",
+        title="수출 가격 전략 보고서",
     )
 
-    product_name = str(p2_data.get("product_name", "") or "제품명 없음")
-    verdict      = str(p2_data.get("verdict",      "") or "—")
-    seg_label    = str(p2_data.get("seg_label",    "") or "—")
-    base_price   = p2_data.get("base_price")
-    formula_str  = str(p2_data.get("formula_str",  "") or "—")
-    mode_label   = str(p2_data.get("mode_label",   "") or "—")
-    scenarios    = p2_data.get("scenarios",    []) or []
-    ai_rationale = p2_data.get("ai_rationale", []) or []
+    product_name      = str(p2_data.get("product_name",      "") or "제품명 없음")
+    verdict           = str(p2_data.get("verdict",            "") or "—")
+    seg_label         = str(p2_data.get("seg_label",          "") or "—")
+    base_price        = p2_data.get("base_price")
+    formula_str       = str(p2_data.get("formula_str",        "") or "—")
+    mode_label        = str(p2_data.get("mode_label",         "") or "—")
+    scenarios         = p2_data.get("scenarios",         []) or []
+    ai_rationale      = p2_data.get("ai_rationale",      []) or []
+    market_summary    = str(p2_data.get("market_summary", "") or "")
+    competitor_prices = p2_data.get("competitor_prices", []) or []
 
     from datetime import datetime, timezone as _tz_p2
     generated_date = datetime.now(_tz_p2.utc).strftime("%Y-%m-%d")
-    base_str = f"SGD {base_price:,.4f}" if isinstance(base_price, (int, float)) else "—"
+    base_str = f"USD {base_price:,.2f}" if isinstance(base_price, (int, float)) else "—"
+
+    def _bar_table(txt: str) -> Table:
+        t = Table([[Paragraph(_rx(txt), s_bar)]], colWidths=[CONTENT_W])
+        t.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#4B5563")),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        return t
 
     story: list = []
 
     # ── 제목 + 제품 바 ────────────────────────────────────────────────────────
-    story.append(Paragraph(_rx("싱가포르 수출 가격 전략 보고서 (2공정)"), s_title))
+    story.append(Paragraph(_rx("수출 가격 전략 보고서"), s_title))
     story.append(Paragraph(_rx(generated_date), s_subtitle))
     story.append(Spacer(1, 6))
-
-    bar_txt = f"{product_name}  |  판정: {verdict}  |  시장: {seg_label}"
-    bar_tbl = Table([[Paragraph(_rx(bar_txt), s_bar)]], colWidths=[CONTENT_W])
-    bar_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#4B5563")),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
-        ("TOPPADDING",    (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    story.append(bar_tbl)
+    story.append(_bar_table(f"{product_name}  |  {generated_date}"))
     story.append(Spacer(1, 10))
 
-    # ── 1. 원 가격 ────────────────────────────────────────────────────────────
-    story.append(Paragraph(_rx("1. 원 가격 (기준 가격)"), s_section))
+    # ── 1. 거시 시장 ─────────────────────────────────────────────────────────
+    story.append(Paragraph(_rx("1. 거시 시장"), s_section))
+    mkt_txt = market_summary or (
+        " ".join(str(r) for r in ai_rationale[:3]) if ai_rationale else "—"
+    )
+    story.append(Paragraph(_rx(mkt_txt[:600]), s_cell))
+    story.append(Spacer(1, 6))
+
+    # ── 2. 단가 (시장기준가) ─────────────────────────────────────────────────
+    story.append(Paragraph(_rx(f"2. {product_name} 단가 (시장기준가)"), s_section))
     base_tbl = Table([
-        [Paragraph(_rx("기준 가격"), s_cell_h), Paragraph(_rx(base_str),    s_cell)],
-        [Paragraph(_rx("산정 방식"), s_cell_h), Paragraph(_rx(mode_label),  s_cell)],
-        [Paragraph(_rx("시장 구분"), s_cell_h), Paragraph(_rx(seg_label),   s_cell)],
+        [Paragraph(_rx("기준 가격"), s_cell_h), Paragraph(_rx(base_str),   s_cell)],
+        [Paragraph(_rx("산정 방식"), s_cell_h), Paragraph(_rx(mode_label), s_cell)],
+        [Paragraph(_rx("시장 구분"), s_cell_h), Paragraph(_rx(seg_label),  s_cell)],
     ], colWidths=[COL1, COL2])
     base_tbl.setStyle(TableStyle(_base_style([
         ("BACKGROUND", (0, 1), (-1, 1), C_ALT),
@@ -925,93 +897,88 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
     story.append(base_tbl)
     story.append(Spacer(1, 6))
 
-    # ── 2. 적용한 계산 공식 ────────────────────────────────────────────────────
-    story.append(Paragraph(_rx("2. 적용한 계산 공식"), s_section))
-    formula_tbl = Table([
-        [Paragraph(_rx("공식"), s_cell_h), Paragraph(_rx(formula_str), s_mono)],
-    ], colWidths=[COL1, COL2])
-    formula_tbl.setStyle(TableStyle(_base_style()))
-    story.append(formula_tbl)
+    # ── 3. 거래처 참고 가격 ───────────────────────────────────────────────────
+    story.append(Paragraph(_rx("3. 거래처 참고 가격"), s_section))
+    if competitor_prices:
+        w_name  = CONTENT_W * 0.22
+        w_prod  = CONTENT_W * 0.26
+        w_ing   = CONTENT_W * 0.30
+        w_price = CONTENT_W * 0.22
+        s_hdr2  = ps("CmpHdr", fontName=bold_font, fontSize=9, textColor=colors.white,
+                     leading=13, wordWrap="CJK")
+        comp_hdr = [
+            Paragraph(_rx("업체명"),   s_hdr2),
+            Paragraph(_rx("제품명"),   s_hdr2),
+            Paragraph(_rx("성분·함량"), s_hdr2),
+            Paragraph(_rx("시장가"),   s_hdr2),
+        ]
+        comp_rows: list[list] = [comp_hdr]
+        extra_comp: list[tuple] = [("BACKGROUND", (0, 0), (-1, 0), C_NAVY)]
+        for i, cp in enumerate(competitor_prices, 1):
+            comp_rows.append([
+                Paragraph(_rx(str(cp.get("name",       "") or "—")), s_cell),
+                Paragraph(_rx(str(cp.get("product",    "") or "—")), s_cell),
+                Paragraph(_rx(str(cp.get("ingredient", "") or "—")), s_cell),
+                Paragraph(_rx(str(cp.get("price",      "") or "—")), s_cell),
+            ])
+            if i % 2 == 0:
+                extra_comp.append(("BACKGROUND", (0, i), (-1, i), C_ALT))
+        comp_tbl = Table(comp_rows, colWidths=[w_name, w_prod, w_ing, w_price])
+        comp_tbl.setStyle(TableStyle(_base_style(extra_comp)))
+        story.append(comp_tbl)
+    else:
+        story.append(Paragraph(_rx("거래처 참고 가격 데이터 없음"), s_cell))
     story.append(Spacer(1, 6))
 
-    # ── AI 분석 근거 (AI 모드 전용) ────────────────────────────────────────────
-    if ai_rationale:
-        story.append(Paragraph(_rx("AI 분석 근거"), s_section))
-        rat_rows = [
-            [Paragraph(_rx(f"• {line}"), s_cell)]
-            for line in ai_rationale
-            if str(line).strip()
-        ]
-        if rat_rows:
-            rat_tbl = Table(rat_rows, colWidths=[CONTENT_W])
-            rat_tbl.setStyle(TableStyle([
-                ("GRID",          (0, 0), (-1, -1), 0.5, C_BORDER),
-                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING",    (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 10),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
-                ("BACKGROUND",    (0, 0), (-1, -1), C_ALT),
-            ]))
-            story.append(rat_tbl)
-        story.append(Spacer(1, 6))
+    # ── 4. 가격 시나리오 (공공 / 민간 분리) ──────────────────────────────────
+    story.append(Paragraph(_rx("4. 가격 시나리오"), s_section))
 
-    # ── 3. 가격 시나리오 ──────────────────────────────────────────────────────
-    story.append(Paragraph(_rx("3. 가격 시나리오"), s_section))
-
-    # 시나리오 레이블 정규화 (구버전 "공격적인 시나리오" → "공격" 등 모두 처리)
-    def _sc_key(lbl: str) -> str:
-        lbl = str(lbl or "")
-        if "공격" in lbl: return "공격"
-        if "보수" in lbl: return "보수"
-        return "평균"
+    def _sc_label_type(lbl: str) -> str:
+        """저가진입 / 기준가 / 프리미엄 구분."""
+        lbl = str(lbl or "").lower()
+        if "저" in lbl or "low" in lbl or "공격" in lbl: return "저가 진입"
+        if "프리" in lbl or "prem" in lbl or "high" in lbl: return "프리미엄"
+        return "기준가"
 
     _SC_BG: dict[str, Any] = {
-        "공격": colors.HexColor("#FEF2F2"),
-        "평균": colors.HexColor("#EFF6FF"),
-        "보수": colors.HexColor("#F0FDF4"),
+        "저가 진입": colors.HexColor("#F0FDF4"),
+        "기준가":    colors.HexColor("#EFF6FF"),
+        "프리미엄":  colors.HexColor("#FEF2F2"),
     }
     _SC_LC: dict[str, Any] = {
-        "공격": colors.HexColor("#DC2626"),
-        "평균": colors.HexColor("#2563EB"),
-        "보수": colors.HexColor("#16A34A"),
+        "저가 진입": colors.HexColor("#16A34A"),
+        "기준가":    colors.HexColor("#2563EB"),
+        "프리미엄":  colors.HexColor("#DC2626"),
     }
 
-    for sc in scenarios:
-        raw_label = str(sc.get("label", sc.get("name", "")) or "")
-        key       = _sc_key(raw_label)
-        label     = raw_label or key
-        price_val = sc.get("price") if sc.get("price") is not None else sc.get("price_sgd")
-        reason    = str(sc.get("reason", "") or "—")
-        formula   = str(sc.get("formula", "") or "").strip()
-        price_str = (
-            f"SGD {float(price_val):,.2f}" if isinstance(price_val, (int, float)) else "—"
+    def _render_scenario_block(sc: dict, idx: int) -> None:
+        raw_label  = str(sc.get("label", sc.get("name", "")) or "")
+        sc_type    = _sc_label_type(raw_label)
+        label      = f"[{sc_type}]"
+        price_val  = sc.get("price") if sc.get("price") is not None else sc.get("price_sgd")
+        reason     = str(sc.get("reason", "") or "—")
+        formula    = str(sc.get("formula", "") or "").strip()
+        currency   = "USD"  # 칠레는 USD 기준
+        price_str  = (
+            f"{currency} {float(price_val):,.2f}" if isinstance(price_val, (int, float)) else "—"
         )
-        bg = _SC_BG.get(key, C_ALT)
-        lc = _SC_LC.get(key, C_NAVY)
+        bg = _SC_BG.get(sc_type, C_ALT)
+        lc = _SC_LC.get(sc_type, C_NAVY)
 
-        uid = f"{key}_{id(sc)}"
-        s_sc_label = ps(f"ScL_{uid}", fontName=bold_font, fontSize=10,
-                        textColor=lc, leading=14, wordWrap="CJK")
-        s_sc_price = ps(f"ScP_{uid}", fontName=bold_font, fontSize=12,
-                        textColor=C_NAVY, leading=16, wordWrap="CJK")
-        s_sc_formula = ps(f"ScF_{uid}", fontName=bold_font,
-                          fontSize=8.5, textColor=C_NAVY, leading=12, wordWrap="CJK")
+        uid = f"sc_{idx}_{id(sc)}"
+        s_lbl = ps(f"ScL_{uid}", fontName=bold_font, fontSize=10, textColor=lc, leading=14, wordWrap="CJK")
+        s_prc = ps(f"ScP_{uid}", fontName=bold_font, fontSize=12, textColor=C_NAVY, leading=16, wordWrap="CJK")
+        s_frm = ps(f"ScF_{uid}", fontName=base_font, fontSize=8.5, textColor=C_NAVY, leading=12, wordWrap="CJK")
 
         rows = [
-            [Paragraph(_rx(label),     s_sc_label),
-             Paragraph(_rx(price_str), s_sc_price)],
-            [Paragraph(_rx("근거"),    s_cell_h),
-             Paragraph(_rx(reason),    s_reason)],
+            [Paragraph(_rx(label), s_lbl), Paragraph(_rx(price_str), s_prc)],
+            [Paragraph(_rx("근거"), s_cell_h), Paragraph(_rx(reason), s_reason)],
         ]
         if formula:
-            rows.append([
-                Paragraph(_rx("계산식"), s_cell_h),
-                Paragraph(_rx(formula),  s_sc_formula),
-            ])
+            rows.append([Paragraph(_rx("FOB 수출가 역산식"), s_cell_h), Paragraph(_rx(formula), s_frm)])
 
-        sc_tbl = Table(rows, colWidths=[COL1, COL2])
-        sc_tbl.setStyle(TableStyle([
+        tbl = Table(rows, colWidths=[COL1, COL2])
+        tbl.setStyle(TableStyle([
             ("GRID",          (0, 0), (-1, -1), 0.5, C_BORDER),
             ("VALIGN",        (0, 0), (-1, -1), "TOP"),
             ("TOPPADDING",    (0, 0), (-1, -1), 6),
@@ -1020,8 +987,39 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
             ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
             ("BACKGROUND",    (0, 0), (-1, -1), bg),
         ]))
-        story.append(sc_tbl)
+        story.append(tbl)
         story.append(Spacer(1, 4))
+
+    # 공공/민간 구분 — market 필드 또는 절반 분할
+    public_scs  = [s for s in scenarios if str(s.get("market", "")).startswith("pub")]
+    private_scs = [s for s in scenarios if str(s.get("market", "")).startswith("pri")]
+    if not public_scs and not private_scs:
+        mid = max(1, len(scenarios) // 2)
+        public_scs, private_scs = scenarios[:mid], scenarios[mid:]
+
+    if public_scs:
+        data_src = str(p2_data.get("public_data_src", "정부 입찰가, 조달청 공시가 참고"))
+        story.append(Paragraph(_rx(f"▸ 4-1. 공공 시장  (데이터 소스: {data_src})"), s_cell_h))
+        story.append(Spacer(1, 3))
+        for i, sc in enumerate(public_scs):
+            _render_scenario_block(sc, i)
+        story.append(Spacer(1, 6))
+
+    if private_scs:
+        data_src2 = str(p2_data.get("private_data_src", "민간 병원·약국 납품가 참고"))
+        story.append(Paragraph(_rx(f"▸ 4-2. 민간 시장  (데이터 소스: {data_src2})"), s_cell_h))
+        story.append(Spacer(1, 3))
+        for i, sc in enumerate(private_scs):
+            _render_scenario_block(sc, len(public_scs) + i)
+
+    # 면책 조항
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(
+        _rx("※ 본 산출 결과는 AI 분석에 기반한 추정치이므로, "
+            "최종 의사결정 전 반드시 담당자의 검토 및 확인이 필요합니다."),
+        ps("Disclaimer", fontName=base_font, fontSize=8, textColor=colors.HexColor("#6B7280"),
+           leading=12, wordWrap="CJK"),
+    ))
 
     doc.build(story)
 
@@ -1107,6 +1105,204 @@ def main(argv: list[str] | None = None) -> int:
         f"(총 {meta['total_products']}품목)"
     )
     return 0
+
+
+# ── 표지 PDF ─────────────────────────────────────────────────────────────────
+
+def render_cover_pdf(
+    out_path: Path,
+    *,
+    country: str = "칠레",
+    product_name: str = "",
+    inn_label: str = "",
+    generated_date: str = "",
+) -> None:
+    """합본 보고서 표지 1페이지 PDF 생성."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    )
+
+    W, _H = A4
+    MARGIN = 25 * mm
+    CONTENT_W = W - 2 * MARGIN
+    base_font, bold_font = _font_pair()
+    C_NAVY = colors.HexColor("#1B2A4A")
+    C_GREEN = colors.HexColor("#27AE60")
+
+    if not generated_date:
+        from datetime import datetime, timezone as _tz
+        generated_date = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+
+    def ps(name: str, **kw) -> ParagraphStyle:
+        return ParagraphStyle(name, **kw)
+
+    def _rx(t: str) -> str:
+        return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    doc = SimpleDocTemplate(
+        str(out_path), pagesize=A4,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=30 * mm, bottomMargin=20 * mm,
+        title=f"{country} 수출 종합 분석 보고서",
+    )
+
+    story: list = []
+    story.append(Spacer(1, 20 * mm))
+
+    # 회사명
+    story.append(Paragraph(_rx("Korea United Pharm. Inc."), ps(
+        "Co", fontName=bold_font, fontSize=12, textColor=C_GREEN,
+        alignment=TA_CENTER, leading=16, spaceAfter=4,
+    )))
+
+    # 제목
+    story.append(Paragraph(_rx(f"{country} 수출 종합 분석 보고서"), ps(
+        "MainTitle", fontName=bold_font, fontSize=26, textColor=C_NAVY,
+        alignment=TA_CENTER, leading=34, spaceAfter=6,
+    )))
+
+    # 구분선
+    story.append(HRFlowable(width="100%", thickness=2, color=C_NAVY, spaceAfter=12))
+
+    # 제품명
+    if product_name:
+        story.append(Paragraph(_rx(product_name), ps(
+            "ProdName", fontName=bold_font, fontSize=18, textColor=C_NAVY,
+            alignment=TA_CENTER, leading=24, spaceAfter=4,
+        )))
+    if inn_label:
+        story.append(Paragraph(_rx(inn_label), ps(
+            "Inn", fontName=base_font, fontSize=12, textColor=colors.HexColor("#6B7280"),
+            alignment=TA_CENTER, leading=16, spaceAfter=20,
+        )))
+
+    story.append(Spacer(1, 10 * mm))
+
+    # 목차 박스
+    toc_rows = [
+        ["1공정", "시장조사 보고서", "의료 거시환경 · 무역/규제 · 참고 가격 · 리스크"],
+        ["2공정", "수출 가격 전략 보고서", "거시 시장 · 단가 · 거래처 참고가 · 가격 시나리오"],
+        ["3공정", "바이어 발굴 보고서", "후보 리스트 · 상세 바이어 정보"],
+    ]
+    toc_w = [CONTENT_W * 0.12, CONTENT_W * 0.35, CONTENT_W * 0.53]
+    toc_data = []
+    for row in toc_rows:
+        toc_data.append([
+            Paragraph(_rx(row[0]), ps("TN", fontName=bold_font, fontSize=10,
+                                      textColor=colors.white, leading=14, wordWrap="CJK")),
+            Paragraph(_rx(row[1]), ps("TT", fontName=bold_font, fontSize=10,
+                                      textColor=C_NAVY, leading=14, wordWrap="CJK")),
+            Paragraph(_rx(row[2]), ps("TD", fontName=base_font, fontSize=9,
+                                      textColor=colors.HexColor("#374151"), leading=13, wordWrap="CJK")),
+        ])
+    toc_tbl = Table(toc_data, colWidths=toc_w)
+    extras = []
+    for i, _ in enumerate(toc_rows):
+        extras.append(("BACKGROUND", (0, i), (0, i), C_NAVY))
+        if i % 2 == 1:
+            extras.append(("BACKGROUND", (1, i), (-1, i), colors.HexColor("#F4F6F9")))
+    toc_tbl.setStyle(TableStyle([
+        ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7E3")),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+    ] + extras))
+    story.append(toc_tbl)
+
+    story.append(Spacer(1, 16 * mm))
+
+    # 발행일
+    story.append(Paragraph(_rx(f"발행일: {generated_date}"), ps(
+        "Date", fontName=base_font, fontSize=10, textColor=colors.HexColor("#6B7280"),
+        alignment=TA_CENTER, leading=14,
+    )))
+    story.append(Paragraph(_rx("본 보고서는 Claude AI 및 Perplexity 기반 자동 생성 분석 결과입니다."), ps(
+        "Note", fontName=base_font, fontSize=9, textColor=colors.HexColor("#9CA3AF"),
+        alignment=TA_CENTER, leading=13,
+    )))
+
+    doc.build(story)
+
+
+# ── 합본 PDF (표지 + P1 + P2 + P3) ──────────────────────────────────────────
+
+def render_combined_pdf(
+    *,
+    p1_report: dict | None = None,
+    p2_data: dict | None = None,
+    p3_companies: list | None = None,
+    p3_product_label: str = "",
+    country: str = "칠레",
+    product_name: str = "",
+    inn_label: str = "",
+    out_path: Path,
+) -> None:
+    """표지 + P1(시장조사) + P2(가격전략) + P3(바이어) 합본 PDF 생성.
+
+    각 섹션이 None이면 해당 섹션은 건너뜀.
+    """
+    import tempfile
+    try:
+        from pypdf import PdfWriter, PdfReader  # type: ignore[import]
+    except ImportError:
+        from PyPDF2 import PdfWriter, PdfReader  # type: ignore[import]
+
+    from datetime import datetime, timezone as _tz
+    generated_date = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+
+    writer = PdfWriter()
+
+    with tempfile.TemporaryDirectory() as _tmp:
+        tmp = Path(_tmp)
+
+        # ── 표지 ─────────────────────────────────────────────────────────────
+        cover_path = tmp / "cover.pdf"
+        render_cover_pdf(
+            cover_path,
+            country=country,
+            product_name=product_name,
+            inn_label=inn_label,
+            generated_date=generated_date,
+        )
+        reader = PdfReader(str(cover_path))
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # ── P1 시장조사 ──────────────────────────────────────────────────────
+        if p1_report:
+            p1_path = tmp / "p1.pdf"
+            render_pdf(p1_report, p1_path)
+            reader = PdfReader(str(p1_path))
+            for page in reader.pages:
+                writer.add_page(page)
+
+        # ── P2 가격전략 ──────────────────────────────────────────────────────
+        if p2_data:
+            p2_path = tmp / "p2.pdf"
+            render_p2_pdf(p2_data, p2_path)
+            reader = PdfReader(str(p2_path))
+            for page in reader.pages:
+                writer.add_page(page)
+
+        # ── P3 바이어 ────────────────────────────────────────────────────────
+        if p3_companies:
+            p3_path = tmp / "p3.pdf"
+            from analysis.buyer_report_generator import build_buyer_pdf
+            build_buyer_pdf(p3_companies, p3_product_label or product_name, p3_path)
+            reader = PdfReader(str(p3_path))
+            for page in reader.pages:
+                writer.add_page(page)
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(str(out_path), "wb") as fout:
+            writer.write(fout)
 
 
 if __name__ == "__main__":

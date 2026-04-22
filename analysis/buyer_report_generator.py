@@ -30,21 +30,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-# ── 한글 폰트 등록 ────────────────────────────────────────────────────────────
-_FONT_DIR = Path(__file__).resolve().parents[1] / "fonts"
-_FONT_REGULAR = _FONT_DIR / "NanumGothic.ttf"
-_FONT_BOLD    = _FONT_DIR / "NanumGothicBold.ttf"
-
+# ── 한글 폰트 등록 (공유 유틸 사용) ─────────────────────────────────────────
 def _register_fonts() -> tuple[str, str]:
-    """한글 폰트 등록. 폰트 파일 없으면 Helvetica 폴백."""
-    if _FONT_REGULAR.is_file() and _FONT_BOLD.is_file():
-        try:
-            pdfmetrics.registerFont(TTFont("Korean",      str(_FONT_REGULAR)))
-            pdfmetrics.registerFont(TTFont("Korean-Bold", str(_FONT_BOLD)))
-            return "Korean", "Korean-Bold"
-        except Exception:
-            pass
-    return "Helvetica", "Helvetica-Bold"
+    """공유 pdf_fonts 유틸 위임."""
+    try:
+        from utils.pdf_fonts import register
+        return register()
+    except Exception:
+        return "Helvetica", "Helvetica-Bold"
 
 _FONT, _FONT_BOLD_NAME = _register_fonts()
 
@@ -99,20 +92,21 @@ def _dash(val: Any) -> str:
     return str(val)
 
 
-def _build_cover(product_label: str, company_count: int, styles: dict) -> list:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+def _build_cover(product_label: str, company_count: int, styles: dict,
+                  country: str = "Chile") -> list:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    country_label = {"Chile": "칠레", "Singapore": "싱가포르"}.get(country, country)
     return [
         Spacer(1, 30*mm),
-        Paragraph("바이어 발굴 보고서", styles["cover_title"]),
-        Paragraph(f"제품: {product_label}", styles["cover_sub"]),
-        Paragraph(f"발굴 기업 수: {company_count}개  |  분석일: {now}", styles["small"]),
+        Paragraph(f"{country_label} 바이어 후보 리스트 — {product_label}", styles["cover_title"]),
+        Paragraph(f"{country_label}  |  {now}", styles["cover_sub"]),
+        Paragraph(f"후보 기업 수: {company_count}개사", styles["small"]),
         Spacer(1, 6*mm),
         HRFlowable(width="100%", thickness=1.5, color=_NAVY),
         Spacer(1, 4*mm),
         Paragraph(
-            "본 보고서는 CPHI Japan 전시회 참가 기업 크롤링 및 Claude AI 심층조사를 통해 "
-            "자동 생성된 바이어 발굴 분석 결과입니다. "
-            "성분/치료군 일치 기업 및 싱가포르·ASEAN 대상 사업자를 대상으로 수집하였습니다.",
+            f"※ 아래 바이어 후보는 CPHI 등록 및 Perplexity 웹 분석을 통해 도출되었으며, "
+            f"개별 기업의 {country_label} 진출 현황 및 제품 연관성은 추가 실사가 필요합니다.",
             styles["body"],
         ),
         PageBreak(),
@@ -121,7 +115,7 @@ def _build_cover(product_label: str, company_count: int, styles: dict) -> list:
 
 def _build_summary_table(companies: list[dict], styles: dict) -> list:
     elems: list = [
-        Paragraph("바이어 후보 요약", styles["cover_title"]),
+        Paragraph(f"1. 바이어 후보 리스트 (전체 {len(companies)}개사)", styles["cover_title"]),
         Spacer(1, 4*mm),
     ]
     header = ["#", "기업명", "국가", "카테고리", "이메일"]
@@ -188,12 +182,36 @@ def _build_company_page(c: dict, idx: int, styles: dict) -> list:
         elems.append(Paragraph(overview, styles["overview"]))
         elems.append(Spacer(1, 2*mm))
 
-    # ── 추천 이유 (강조 박스) ─────────────────────────────────────────────
-    reason = _dash(e.get("recommendation_reason"))
-    if reason != "-":
-        elems.append(Paragraph("추천 이유", styles["section"]))
-        elems.append(Paragraph(reason, styles["reason"]))
-        elems.append(Spacer(1, 3*mm))
+    # ── 추천 이유 (SG_03 양식: ①매출 ②파이프라인 ③제조소 ④수입경험 ⑤약국체인) ──
+    elems.append(Paragraph("▸ 추천 이유", styles["section"]))
+
+    def _fmt_rich(num: str, label: str, val: Any, detail: str = "") -> str:
+        if val is None or str(val).strip() in ("", "None", "null", "—", "-"):
+            vstr = "-"
+        elif isinstance(val, bool):
+            vstr = "있음" if val else "없음"
+        else:
+            vstr = str(val)
+        full = f"{num} {label}   {vstr}"
+        if detail and detail != "-" and detail != vstr:
+            full += f"\n{detail}"
+        return full
+
+    raw_reason = _dash(e.get("recommendation_reason"))
+    criteria_lines = [
+        _fmt_rich("①", "매출 규모",   e.get("revenue"), e.get("recommendation_revenue", "")),
+        _fmt_rich("②", "파이프라인",  e.get("pipeline"), e.get("recommendation_pipeline", "")),
+        _fmt_rich("③", "제조소 보유", "있음" if e.get("has_gmp") else e.get("has_gmp")),
+        _fmt_rich("④", "수입 경험",   e.get("import_history"), e.get("recommendation_import", "")),
+        _fmt_rich("⑤", "약국 체인",   e.get("has_pharmacy_chain"), e.get("recommendation_channel", "")),
+    ]
+    # raw_reason이 충분히 풍부하면 그걸 우선 사용, 아니면 structured 5-point
+    if raw_reason != "-" and len(raw_reason) > 30:
+        display_reason = raw_reason
+    else:
+        display_reason = "\n".join(criteria_lines)
+    elems.append(Paragraph(display_reason.replace("\n", "<br/>"), styles["reason"]))
+    elems.append(Spacer(1, 3*mm))
 
     # ── 기본 정보 ─────────────────────────────────────────────────────────
     elems.append(Paragraph("기본 정보", styles["section"]))
@@ -300,7 +318,19 @@ def build_buyer_pdf(
     companies: list[dict[str, Any]],
     product_label: str,
     out_path: Path,
+    *,
+    country: str = "Chile",
+    top_detail: int = 3,
 ) -> None:
+    """SG_03 양식 기반 바이어 후보 리스트 PDF 생성.
+
+    Args:
+        companies:      기업 목록 (최대 10개)
+        product_label:  제품 레이블 (예: 'Gadvoa Inj.')
+        out_path:       저장 경로
+        country:        대상 국가 ('Chile' | 'Singapore')
+        top_detail:     상세 정보 출력 상위 N개사 (기본 3)
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(
         str(out_path),
@@ -309,12 +339,35 @@ def build_buyer_pdf(
         rightMargin=18*mm,
         topMargin=16*mm,
         bottomMargin=16*mm,
+        title=f"바이어 후보 리스트 — {product_label}",
     )
     styles = _styles()
     elems: list = []
-    elems += _build_cover(product_label, len(companies), styles)
+
+    # 표지
+    elems += _build_cover(product_label, len(companies), styles, country=country)
+
     if companies:
+        # 전체 요약 테이블 (SG_03 §1)
         elems += _build_summary_table(companies, styles)
-        for i, c in enumerate(companies, 1):
-            elems += _build_company_page(c, i, styles)
+
+        # 상위 N개사 상세 (SG_03 §2)
+        detail_companies = companies[:top_detail]
+        if detail_companies:
+            from reportlab.lib.styles import ParagraphStyle as _PS
+            from reportlab.platypus import Spacer as _SP
+            elems.append(Paragraph(
+                f"2. 우선 접촉 바이어 상세 정보 (상위 {len(detail_companies)}개사)",
+                styles["cover_title"],
+            ))
+            elems.append(_SP(1, 4*mm))
+            elems.append(Paragraph(
+                f"※ 하기 {len(detail_companies)}개사는 성분 연관성, 현지 진출 가능성, "
+                f"채널 적합성을 종합 평가하여 선정하였습니다.",
+                styles["body"],
+            ))
+            elems.append(_SP(1, 4*mm))
+            for i, c in enumerate(detail_companies, 1):
+                elems += _build_company_page(c, i, styles)
+
     doc.build(elems)

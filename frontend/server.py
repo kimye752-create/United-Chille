@@ -10,6 +10,7 @@ import threading
 import time
 import webbrowser
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -190,7 +191,7 @@ def _parse_perplexity_news_items(raw_text: str) -> list[dict[str, str]]:
         if not isinstance(parsed, list):
             continue
         items: list[dict[str, str]] = []
-        for row in parsed[:6]:
+        for row in parsed[:8]:
             if not isinstance(row, dict):
                 continue
             title = str(row.get("title", "") or "").strip()
@@ -198,15 +199,79 @@ def _parse_perplexity_news_items(raw_text: str) -> list[dict[str, str]]:
                 continue
             items.append(
                 {
-                    "title": title,
-                    "source": str(row.get("source", "") or "").strip(),
-                    "date": str(row.get("date", "") or "").strip(),
-                    "link": str(row.get("link", "") or "").strip(),
+                    "title":   title,
+                    "source":  str(row.get("source",  "") or "").strip(),
+                    "date":    str(row.get("date",    "") or "").strip(),
+                    "link":    str(row.get("link",    "") or "").strip(),
+                    "summary": str(row.get("summary", "") or "").strip(),
                 }
             )
         if items:
             return items
     return []
+
+
+def _is_non_korean(text: str) -> bool:
+    """제목에 한글이 거의 없으면 영문/스페인어로 판단."""
+    if not text:
+        return False
+    korean_chars = sum(1 for c in text if "\uAC00" <= c <= "\uD7A3")
+    total_alpha  = sum(1 for c in text if c.isalpha())
+    if total_alpha == 0:
+        return False
+    return korean_chars / total_alpha < 0.3
+
+
+async def _translate_titles_to_korean(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    """영문/스페인어 제목이 포함된 경우 Claude Haiku로 한국어 번역."""
+    import os
+    import anthropic
+
+    non_korean = [i for i, it in enumerate(items) if _is_non_korean(it["title"])]
+    if not non_korean:
+        return items
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        return items  # API 키 없으면 원문 그대로
+
+    titles_to_translate = [items[i]["title"] for i in non_korean]
+    numbered = "\n".join(f"{n+1}. {t}" for n, t in enumerate(titles_to_translate))
+
+    prompt = (
+        "다음 제약/의약품 뉴스 제목들을 자연스러운 한국어로 번역하세요.\n"
+        "번호와 함께 번역 결과만 출력하세요. 설명 없이 번호. 번역문 형식으로만.\n\n"
+        f"{numbered}"
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        response_text = msg.content[0].text.strip()
+
+        # "1. 번역문" 형식 파싱
+        import re
+        translated_lines = {}
+        for line in response_text.splitlines():
+            line = line.strip()
+            m = re.match(r"^(\d+)[.)]\s*(.+)$", line)
+            if m:
+                translated_lines[int(m.group(1))] = m.group(2).strip()
+
+        # 번역된 제목 교체
+        for seq, orig_idx in enumerate(non_korean):
+            translated = translated_lines.get(seq + 1, "")
+            if translated:
+                items[orig_idx]["title"] = translated
+
+    except Exception:
+        pass  # 번역 실패 시 원문 유지
+
+    return items
 
 
 @app.get("/api/news")
@@ -226,29 +291,34 @@ async def api_news() -> JSONResponse:
     try:
         payload = {
             "model": "sonar-pro",
+            "search_recency_filter": "month",   # 최근 1개월 기사 우선 (2026년 기사)
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "You are a Chile pharmaceutical market analyst. "
-                        "Return ONLY a JSON array with up to 6 recent news items. "
-                        "All 'title' values MUST be written in Korean (한국어). "
-                        "Translate any Spanish/English titles into natural Korean."
+                        "당신은 칠레 제약 시장 전문 애널리스트입니다. "
+                        "반드시 JSON 배열만 반환하세요. 설명 텍스트 없음. "
+                        "모든 title 값은 반드시 한국어(Korean)로 작성하세요. "
+                        "영어·스페인어 제목은 반드시 자연스러운 한국어로 번역하세요. "
+                        "각 항목에 summary(한국어 2문장 요약)도 포함하세요."
                     ),
                 },
                 {
                     "role": "user",
                     "content": (
-                        "Find the latest Chile pharmaceutical market and regulatory news "
-                        "(ISP, CENABAST, FONASA, Mercado Público, Cruz Verde, Salcobrand). "
-                        "Return a strict JSON array. Each item must have keys: "
-                        "title (Korean translation required), source, date, link. "
-                        "Translate all titles to Korean. Do not use Spanish or English titles."
+                        "2026년 칠레 제약·의약품 시장의 최신 뉴스 8건을 찾아주세요 "
+                        "(ISP, CENABAST, FONASA, Ley Fármacos, Mercado Público, "
+                        "Cruz Verde, Salcobrand, MINSAL, 약가 규제, 바이오시밀러 등 관련). "
+                        "2026년 기사를 최우선으로 하고, 없으면 2025년 기사를 포함하세요. "
+                        "반환 형식(JSON 배열만): "
+                        "[{\"title\": \"한국어 제목\", \"summary\": \"한국어 2문장 요약\", "
+                        "\"source\": \"출처명\", \"date\": \"YYYY-MM-DD\", \"link\": \"URL\"}] "
+                        "title과 summary는 반드시 한국어로 작성하세요."
                     ),
                 },
             ],
-            "max_tokens": 900,
-            "temperature": 0.2,
+            "max_tokens": 1600,
+            "temperature": 0.1,
         }
         headers = {
             "Authorization": f"Bearer {px_key}",
@@ -271,6 +341,9 @@ async def api_news() -> JSONResponse:
         items = _parse_perplexity_news_items(content)
         if not items:
             return JSONResponse({"ok": False, "error": "Perplexity 응답 파싱 실패", "items": []})
+
+        # 영문/스페인어 제목 → Claude Haiku 한국어 번역
+        items = await _translate_titles_to_korean(items)
 
         data = {"ok": True, "items": items}
         _news_cache["data"] = data
@@ -367,14 +440,53 @@ async def _run_pipeline_for_product(product_key: str) -> None:
         task.update({"step": "analyze", "step_label": "Claude 분석 중…"})
         await _emit({"phase": "pipeline", "message": f"{product_key} — 분석 시작", "level": "info"})
 
+        # CL_ 품목: cl_pricing DB에서 현지 크롤 약가 조회 → AI 프롬프트에 주입 (할루시네이션 방지)
+        pricing_ctx = ""
         if product_key.startswith("CL_"):
             from analysis.ch_export_analyzer import analyze_product
+            from utils.db import fetch_cl_pricing_context
+            _inn_hint = (db_row or {}).get("inn", "") or product_key.replace("CL_", "").replace("_", " ")
+            pricing_ctx = await asyncio.to_thread(fetch_cl_pricing_context, _inn_hint, 8)
+            if pricing_ctx:
+                await _emit({"phase": "pipeline", "message": f"cl_pricing DB {len(pricing_ctx)}자 로드 완료", "level": "info"})
         else:
             from analysis.sg_export_analyzer import analyze_product  # type: ignore[assignment]
-        result = await analyze_product(product_key, db_row)
+        result = await analyze_product(product_key, db_row, pricing_context=pricing_ctx)
         task["result"] = result
         verdict = result.get("verdict") or "미분석"
         await _emit({"phase": "pipeline", "message": f"분석 완료 — {verdict}", "level": "success"})
+
+        # ── DB 적재: P1 분석 결과 → cl_analysis_p1 ──────────────────────────
+        if product_key.startswith("CL_"):
+            try:
+                from utils.db import upsert_cl_analysis_p1
+                _inn_hint_p1 = (db_row or {}).get("inn", "") or product_key.replace("CL_", "").replace("_", " ")
+                _p1_row: dict[str, Any] = {
+                    "product_id":         product_key,
+                    "trade_name":         result.get("trade_name") or product_key,
+                    "inn":                result.get("inn") or _inn_hint_p1,
+                    "hs_code":            result.get("hs_code", ""),
+                    # 도메인: 수출 적합성 판정
+                    "verdict":            result.get("verdict", ""),
+                    "verdict_confidence": result.get("confidence"),
+                    "rationale":          result.get("rationale", ""),
+                    "entry_pathway":      result.get("entry_pathway", ""),
+                    # 도메인: 거시환경
+                    "market_context":     result.get("market_context", ""),
+                    # 도메인: 규제
+                    "isp_reg":            result.get("isp_reg", ""),
+                    # 도메인: 가격
+                    "price_positioning":  result.get("price_positioning", ""),
+                    # 도메인: 리스크
+                    "risks_conditions":   result.get("risks_conditions", ""),
+                    # 도메인: 구조화 근거
+                    "key_factors":        result.get("key_factors", []),
+                    "sources":            result.get("sources", []),
+                }
+                await asyncio.to_thread(upsert_cl_analysis_p1, _p1_row)
+                await _emit({"phase": "pipeline", "message": "P1 결과 DB 저장 완료 (cl_analysis_p1)", "level": "info"})
+            except Exception as _e_p1db:
+                await _emit({"phase": "pipeline", "message": f"P1 DB 저장 스킵: {_e_p1db}", "level": "warn"})
 
         # 2. Perplexity 논문
         task.update({"step": "refs", "step_label": "논문 검색 중…"})
@@ -396,24 +508,63 @@ async def _run_pipeline_for_product(product_key: str) -> None:
         _reports_dir.mkdir(parents=True, exist_ok=True)
 
         # kup_rows는 Step 0에서 이미 비동기로 가져왔으므로 재사용 (DB 이중 조회 방지)
-        _refs_map = {product_key: refs}
-        _report = await asyncio.to_thread(
-            lambda: build_report(
-                kup_rows,
-                datetime.now(_tz.utc).isoformat(),
-                [result],
-                references=_refs_map,
-            )
-        )
         if product_key.startswith("CL_"):
+            # ── 칠레 P1: SG_01 양식 기반 전용 보고서 생성기 사용 ────────────────
             _prefix = "cl_report"
-        elif product_key.startswith("UY_"):
-            _prefix = "uy_report"
+            _pdf_name = f"{_prefix}_{product_key}_{_ts}.pdf"
+            _pdf_path = _reports_dir / _pdf_name
+
+            # cl_pricing DB에서 실측 가격 행 조회 (PDF §3용)
+            _pr_rows: list[dict] = []
+            try:
+                from utils.db import get_client as _get_sb_p1
+                _sb_p1 = _get_sb_p1()
+                _inn_p1 = result.get("inn", "") or pricing_ctx[:50]
+                _pr_r = await asyncio.to_thread(
+                    lambda: _sb_p1.table("cl_pricing")
+                        .select("source_site,brand_name,inn_name,raw_price_clp,cenabast_max_price_clp")
+                        .ilike("inn_name", f"%{_inn_p1[:20]}%")
+                        .limit(12).execute()
+                )
+                _pr_rows = _pr_r.data or []
+            except Exception:
+                pass
+
+            _meta_list = []
+            try:
+                from analysis.ch_export_analyzer import _get_product_meta
+                _meta_list = _get_product_meta()
+            except Exception:
+                pass
+            _meta = next((m for m in _meta_list if m.get("product_id") == product_key), {})
+
+            _p1_data = {
+                **result,
+                "product_id":   product_key,
+                "trade_name":   result.get("trade_name") or _meta.get("trade_name", product_key),
+                "inn":          result.get("inn") or _meta.get("inn", ""),
+                "isp_reg":      _meta.get("isp_reg", "ISP 등록 필요"),
+                "pricing_rows": _pr_rows,
+                "hs_code":      _meta.get("hs_code", "3004.90"),
+                "market_context": result.get("market_context", ""),
+            }
+            from analysis.cl_p1_report import render_cl_p1_pdf
+            await asyncio.to_thread(render_cl_p1_pdf, _p1_data, _pdf_path, refs=refs)
         else:
-            _prefix = "sg_report"
-        _pdf_name = f"{_prefix}_{product_key}_{_ts}.pdf"
-        _pdf_path = _reports_dir / _pdf_name
-        await asyncio.to_thread(render_pdf, _report, _pdf_path)
+            # SG / UY 기존 보고서
+            _refs_map = {product_key: refs}
+            _report = await asyncio.to_thread(
+                lambda: build_report(
+                    kup_rows,
+                    datetime.now(_tz.utc).isoformat(),
+                    [result],
+                    references=_refs_map,
+                )
+            )
+            _prefix = "uy_report" if product_key.startswith("UY_") else "sg_report"
+            _pdf_name = f"{_prefix}_{product_key}_{_ts}.pdf"
+            _pdf_path = _reports_dir / _pdf_name
+            await asyncio.to_thread(render_pdf, _report, _pdf_path)
 
         task["pdf"] = _pdf_name
         task.update({"status": "done", "step": "done", "step_label": "완료"})
@@ -445,35 +596,74 @@ async def _run_custom_pipeline(trade_name: str, inn: str, dosage_form: str) -> N
         result = await analyze_custom_product(trade_name, inn, dosage_form)
         _custom_task["result"] = result
 
+        # ── DB 적재: 커스텀 P1 분석 결과 → cl_analysis_p1 ─────────────────
+        try:
+            from utils.db import upsert_cl_analysis_p1
+            _p1_custom_row: dict[str, Any] = {
+                "product_id":         f"CL_custom_{inn[:20].replace(' ','_')}",
+                "trade_name":         trade_name,
+                "inn":                inn,
+                "verdict":            result.get("verdict", ""),
+                "verdict_confidence": result.get("confidence"),
+                "rationale":          result.get("rationale", ""),
+                "entry_pathway":      result.get("entry_pathway", ""),
+                "market_context":     result.get("market_context", ""),
+                "isp_reg":            result.get("isp_reg", "ISP 등록 필요"),
+                "price_positioning":  result.get("price_positioning", ""),
+                "risks_conditions":   result.get("risks_conditions", ""),
+                "key_factors":        result.get("key_factors", []),
+                "sources":            result.get("sources", []),
+            }
+            await asyncio.to_thread(upsert_cl_analysis_p1, _p1_custom_row)
+        except Exception:
+            pass  # DB 저장 실패는 파이프라인 중단 없이 계속
+
         # Step 2: Perplexity 논문
         _custom_task.update({"step": "refs", "step_label": "논문 검색 중…"})
         from analysis.perplexity_references import fetch_references_for_custom
         refs = await fetch_references_for_custom(trade_name, inn)
         _custom_task["refs"] = refs
 
-        # Step 3: PDF 보고서 (in-process)
+        # Step 2-b: cl_pricing 조회 (할루시네이션 방지)
+        _custom_task.update({"step": "refs", "step_label": "DB 가격 데이터 조회 중…"})
+        _ctx_custom = ""
+        _pr_rows_custom: list[dict] = []
+        try:
+            from utils.db import fetch_cl_pricing_context, get_client as _get_sb_cu
+            _ctx_custom = await asyncio.to_thread(fetch_cl_pricing_context, inn, 8)
+            _sb_cu = _get_sb_cu()
+            _pr_cu = await asyncio.to_thread(
+                lambda: _sb_cu.table("cl_pricing")
+                    .select("source_site,brand_name,inn_name,raw_price_clp,cenabast_max_price_clp")
+                    .ilike("inn_name", f"%{inn[:20]}%")
+                    .limit(10).execute()
+            )
+            _pr_rows_custom = _pr_cu.data or []
+        except Exception:
+            pass
+
+        # Step 3: PDF 보고서 (SG_01 양식 기반 cl_p1_report)
         _custom_task.update({"step": "report", "step_label": "PDF 생성 중…"})
         from datetime import datetime, timezone as _tz2
-        from report_generator import build_report, render_pdf
-        from utils.db import fetch_kup_products
 
         _ts2 = datetime.now(_tz2.utc).strftime("%Y%m%d_%H%M%S")
         _reports_dir2 = ROOT / "reports"
         _reports_dir2.mkdir(parents=True, exist_ok=True)
 
-        _products_db2 = await asyncio.to_thread(fetch_kup_products, "CL")
-        _refs_map2 = {"custom": refs}
-        _report2 = await asyncio.to_thread(
-            lambda: build_report(
-                _products_db2,
-                datetime.now(_tz2.utc).isoformat(),
-                [result],
-                references=_refs_map2,
-            )
-        )
         _pdf_name2 = f"cl_report_custom_{_ts2}.pdf"
         _pdf_path2 = _reports_dir2 / _pdf_name2
-        await asyncio.to_thread(render_pdf, _report2, _pdf_path2)
+
+        _p1_custom = {
+            **result,
+            "product_id":   "CL_custom",
+            "trade_name":   trade_name,
+            "inn":          inn,
+            "isp_reg":      "ISP 등록 필요 — 신규 RM 절차 (시판 전 허가 미확인)",
+            "pricing_rows": _pr_rows_custom,
+            "hs_code":      "3004.90",
+        }
+        from analysis.cl_p1_report import render_cl_p1_pdf
+        await asyncio.to_thread(render_cl_p1_pdf, _p1_custom, _pdf_path2, refs=refs)
 
         _custom_task["pdf"] = _pdf_name2
         _custom_task.update({"status": "done", "step": "done", "step_label": "완료"})
@@ -652,17 +842,108 @@ async def download_report(name: str | None = None, inline: bool = False) -> Any:
     )
 
 
+# ── 합본 보고서 (표지 + P1 + P2 + P3) ──────────────────────────────────────────
+
+class CombinedReportBody(BaseModel):
+    product_name:    str  = ""
+    inn_label:       str  = ""
+    country:         str  = "칠레"
+    p1_report:       dict | None = None   # render_pdf()용 보고서 dict
+    p2_data:         dict | None = None   # render_p2_pdf()용 데이터 dict
+    p3_companies:    list | None = None   # build_buyer_pdf()용 바이어 리스트
+    p3_product_label: str = ""
+    use_latest_pdfs: bool = True          # True: 최신 개별 PDF 병합 / False: 데이터로 재생성
+
+
+@app.post("/api/cl/report/combined")
+async def generate_combined_report(body: CombinedReportBody) -> JSONResponse:
+    """표지 + P1 + P2 + P3 합본 PDF 생성.
+
+    use_latest_pdfs=True(기본값): reports/ 에서 최신 cl_report_*.pdf, cl_p2_*.pdf, cl_p3_*.pdf 를 병합.
+    use_latest_pdfs=False: body 에 담긴 데이터로 각 섹션을 재생성 후 병합.
+    """
+    import re
+    from datetime import datetime, timezone as _tz_c
+
+    _ts = datetime.now(_tz_c.utc).strftime("%Y%m%d_%H%M%S")
+    reports_dir = ROOT / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    safe = re.sub(r"[^\w가-힣]", "_", body.product_name)[:25] or "report"
+    out_name = f"cl_combined_{safe}_{_ts}.pdf"
+    out_path = reports_dir / out_name
+
+    if body.use_latest_pdfs:
+        # 최신 개별 PDF 병합
+        try:
+            from pypdf import PdfWriter, PdfReader  # type: ignore[import]
+        except ImportError:
+            from PyPDF2 import PdfWriter, PdfReader  # type: ignore[import]
+
+        from report_generator import render_cover_pdf
+        import tempfile
+
+        p1_pdfs = sorted(reports_dir.glob("cl_report_*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+        p2_pdfs = sorted(reports_dir.glob("cl_p2_*.pdf"),     key=lambda p: p.stat().st_mtime, reverse=True)
+        p3_pdfs = sorted(reports_dir.glob("cl_p3_*.pdf"),     key=lambda p: p.stat().st_mtime, reverse=True)
+
+        writer = PdfWriter()
+
+        with tempfile.TemporaryDirectory() as _tmp:
+            cover_path = Path(_tmp) / "cover.pdf"
+            await asyncio.to_thread(
+                render_cover_pdf, cover_path,
+                country=body.country,
+                product_name=body.product_name,
+                inn_label=body.inn_label,
+            )
+            reader = PdfReader(str(cover_path))
+            for page in reader.pages:
+                writer.add_page(page)
+
+        for pdf_path in [
+            p1_pdfs[0] if p1_pdfs else None,
+            p2_pdfs[0] if p2_pdfs else None,
+            p3_pdfs[0] if p3_pdfs else None,
+        ]:
+            if pdf_path and pdf_path.is_file():
+                reader = PdfReader(str(pdf_path))
+                for page in reader.pages:
+                    writer.add_page(page)
+
+        with open(str(out_path), "wb") as fout:
+            writer.write(fout)
+    else:
+        # 데이터로 재생성
+        from report_generator import render_combined_pdf
+        await asyncio.to_thread(
+            render_combined_pdf,
+            p1_report=body.p1_report,
+            p2_data=body.p2_data,
+            p3_companies=body.p3_companies,
+            p3_product_label=body.p3_product_label,
+            country=body.country,
+            product_name=body.product_name,
+            inn_label=body.inn_label,
+            out_path=out_path,
+        )
+
+    return JSONResponse({"ok": True, "pdf": out_name})
+
+
 # ── 2공정 가격 전략 PDF ───────────────────────────────────────────────────────
 
 class P2ReportBody(BaseModel):
-    product_name:  str   = ""
-    verdict:       str   = ""
-    seg_label:     str   = ""
-    base_price:    float | None = None
-    formula_str:   str   = ""
-    mode_label:    str   = ""
-    scenarios:     list  = []
-    ai_rationale:  list  = []
+    product_name:       str   = ""
+    verdict:            str   = ""
+    seg_label:          str   = ""
+    base_price:         float | None = None
+    formula_str:        str   = ""
+    mode_label:         str   = ""
+    scenarios:          list  = []
+    ai_rationale:       list  = []
+    market_summary:     str   = ""   # §1 거시 시장 요약 (3~4줄)
+    competitor_prices:  list  = []   # §3 거래처 참고가격 [{name,product,ingredient,price}]
 
 
 @app.post("/api/p2/report")
@@ -696,9 +977,142 @@ async def generate_p2_report(body: P2ReportBody) -> JSONResponse:
     return JSONResponse({"ok": True, "pdf": pdf_name})
 
 
-# ── 2공정 AI 파이프라인 (PDF → Haiku 가격 추출 → 계산 → Haiku 분석 → PDF) ────────
+# ── 2공정 AI 파이프라인 (PDF → Haiku 가격 추출 → 계산 → Haiku 분석 × 2시장 → PDF) ────
+
+# 칠레 시장별 FOB 역산 기본 요소 (AI 추천 기본값)
+_CL_FOB_ELEMENTS_PUBLIC = [
+    {"key": "agent_fee",       "label": "에이전트 수수료",   "value": 5,   "unit": "%",   "type": "pct_deduct"},
+    {"key": "freight",         "label": "운임 배수",         "value": 1.0, "unit": "×배수","type": "mult"},
+    {"key": "procurement_fee", "label": "조달청 입찰 수수료","value": 3,   "unit": "%",   "type": "pct_deduct"},
+    {"key": "gpo_discount",    "label": "GPO 물량 할인율",   "value": 2,   "unit": "%",   "type": "pct_deduct"},
+]
+_CL_FOB_ELEMENTS_PRIVATE = [
+    {"key": "agent_fee",         "label": "에이전트 수수료",      "value": 5,   "unit": "%",   "type": "pct_deduct"},
+    {"key": "freight",           "label": "운임 배수",            "value": 1.0, "unit": "×배수","type": "mult"},
+    {"key": "pharma_margin",     "label": "병원·약국 유통 마진",  "value": 15,  "unit": "%",   "type": "pct_deduct"},
+    {"key": "distributor_markup","label": "유통사 마크업",        "value": 8,   "unit": "%",   "type": "pct_add"},
+]
+
+def _elements_product(elements: list[dict]) -> float:
+    """FOB 역산 요소 목록에서 종합 배율을 계산합니다."""
+    result = 1.0
+    for e in elements:
+        v = float(e.get("value", 0))
+        t = e.get("type", "pct_deduct")
+        if t == "pct_deduct":
+            result *= (1 - v / 100)
+        elif t == "pct_add":
+            result *= (1 + v / 100)
+        elif t == "mult":
+            result *= v
+    return result
 
 _p2_ai_task: dict[str, Any] = {}
+
+# 크롤링 상태
+_crawl_task: dict[str, Any] = {}
+
+
+async def _analyze_market_haiku(
+    client: Any,
+    extracted: dict,
+    exchange_rates: dict,
+    market: str,
+    pricing_ctx: str = "",
+) -> dict:
+    """Claude Haiku로 특정 시장(public/private) 가격 전략 분석."""
+    import json, re as _re, asyncio as _asyncio
+
+    usd_clp = exchange_rates["usd_clp"]
+    usd_krw = exchange_rates["usd_krw"]
+    ref_price_clp = extracted.get("ref_price_clp") or 0
+    ref_price_usd = extracted.get("ref_price_usd") or 0
+    if not ref_price_clp and ref_price_usd:
+        ref_price_clp = round(ref_price_usd * usd_clp, 0)
+    ref_display = f"CLP {float(ref_price_clp):,.0f}" if ref_price_clp else (extracted.get("ref_price_text") or "미확인")
+
+    if market == "public":
+        market_label = "공공 시장 (Mercado Público · CENABAST 공급 채널)"
+        channel_note = (
+            "공공: CLP 낙찰가 → IVA 없음(기관 면제) → 관세6%(FTA0%) → 파트너마진10-15% → FOB USD\n"
+            "저가진입: FOB비율 28%, 기준가: 35%, 프리미엄: 42%"
+        )
+    else:
+        market_label = "민간 시장 (Cruz Verde / Salcobrand / Farmacias Ahumada 채널)"
+        channel_note = (
+            "민간: CLP 소매가 ÷ 1.19(IVA) → 약국마진25-35% → 파트너마진15-25% → 관세6% → FOB USD\n"
+            "저가진입: FOB비율 25%, 기준가: 31%, 프리미엄: 38%"
+        )
+
+    prompt = f"""칠레 제약 시장 수출 가격 전략을 수립해주세요.
+
+## 추출된 보고서 정보
+- 제품명: {extracted.get('product_name', '미상')}
+- 소매 참조가 (CLP): {ref_display}
+- 참조가 원문: {extracted.get('ref_price_text', '없음')}
+- 시장: {market_label}
+- 환율: 1 USD = {usd_clp:.2f} CLP / {usd_krw:.2f} KRW
+- 경쟁사: {json.dumps(extracted.get('competitor_prices', []), ensure_ascii=False)}
+- 시장 맥락: {extracted.get('market_context', '')}
+
+## 역산 방식
+{channel_note}
+
+## 요청
+3개 시나리오의 FOB USD 역산가를 산정하세요. 반드시 아래 JSON만 출력:
+{{
+  "final_price_clp": 숫자,
+  "final_price_usd": 숫자,
+  "rationale": "산정 근거 3문장",
+  "ref_price_clp": 숫자,
+  "scenarios": [
+    {{"name": "저가진입", "price_clp": 숫자, "price_usd": 숫자,
+      "reason": "저마진 포지셔닝 정의·근거 한 문단", "formula": "역산식"}},
+    {{"name": "기준가",   "price_clp": 숫자, "price_usd": 숫자,
+      "reason": "기준 포지셔닝 한 문단", "formula": "역산식"}},
+    {{"name": "프리미엄", "price_clp": 숫자, "price_usd": 숫자,
+      "reason": "프리미엄 포지셔닝 한 문단", "formula": "역산식"}}
+  ]
+}}
+
+CLP 참조가 미확인 시 칠레 시장 데이터 기반 합리적 추정값을 사용하세요.
+
+{f"## DB 크롤 실제 가격 데이터 (Cruz Verde / Salcobrand / CENABAST 등 실측){chr(10)}{pricing_ctx}{chr(10)}위 실측 데이터를 가격 산정의 최우선 근거로 사용하세요. 실측값이 있으면 추정값 대신 반드시 활용하세요." if pricing_ctx else ""}"""
+
+    try:
+        resp = await _asyncio.to_thread(
+            lambda: client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1536,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        )
+        raw = resp.content[0].text
+        m = _re.search(r"\{.*\}", raw, _re.S)
+        if m:
+            return json.loads(m.group(0))
+    except Exception:
+        pass
+
+    # 폴백
+    base_clp = ref_price_clp or 5000
+    ratio = 0.35 if market == "public" else 0.31
+    est_usd  = round(base_clp / usd_clp * ratio, 2) if usd_clp else 0
+    est_clp  = round(base_clp * ratio, 0)
+    return {
+        "final_price_clp": est_clp,
+        "final_price_usd": est_usd,
+        "rationale": "AI 응답 파싱 실패 — 기본 역산값입니다.",
+        "ref_price_clp": base_clp,
+        "scenarios": [
+            {"name": "저가진입", "price_clp": round(est_clp * 0.88), "price_usd": round(est_usd * 0.88, 2),
+             "reason": "저마진 진입가", "formula": f"CLP {base_clp:,.0f} × {ratio*0.88:.2f} = USD {est_usd*0.88:.2f}"},
+            {"name": "기준가",   "price_clp": est_clp,              "price_usd": est_usd,
+             "reason": "기준가",   "formula": f"CLP {base_clp:,.0f} × {ratio:.2f} = USD {est_usd:.2f}"},
+            {"name": "프리미엄", "price_clp": round(est_clp * 1.12), "price_usd": round(est_usd * 1.12, 2),
+             "reason": "프리미엄 포지셔닝", "formula": f"CLP {base_clp:,.0f} × {ratio*1.12:.2f} = USD {est_usd*1.12:.2f}"},
+        ],
+    }
 
 
 async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
@@ -831,114 +1245,144 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
             "level": "success",
         })
 
-        # ── Step 4: Claude Haiku — 최종 가격 전략 분석 ──────────────────────────
-        _p2_ai_task.update({"step": "ai_analysis", "step_label": "AI 최종 분석 중…"})
-        await _emit({"phase": "p2_pipeline", "message": "Claude Haiku — 최종 가격 전략 분석", "level": "info"})
-
-        ref_price_clp = extracted.get("ref_price_clp") or 0
-        ref_price_usd = extracted.get("ref_price_usd") or 0
-        usd_clp       = exchange_rates["usd_clp"]
-        usd_krw       = exchange_rates["usd_krw"]
-        clp_krw       = exchange_rates["clp_krw"]
-
-        # CLP 참조가가 없으면 USD로 환산
-        if not ref_price_clp and ref_price_usd:
-            ref_price_clp = round(ref_price_usd * usd_clp, 0)
-        ref_display = f"CLP {float(ref_price_clp):,.0f}" if ref_price_clp else (extracted.get("ref_price_text") or "미확인")
-
-        market_label = "공공 시장 (Mercado Público · CENABAST 공급 채널)" if market == "public" else "민간 시장 (Cruz Verde / Salcobrand / Farmacias Ahumada 채널)"
-        verdict_src  = extracted.get("verdict", "미상")
-        competitor_json = json.dumps(extracted.get("competitor_prices", []), ensure_ascii=False)
-
-        analysis_prompt = f"""칠레 제약 시장 수출 가격 전략을 수립해주세요.
-
-## 추출된 보고서 정보
-- 제품명: {extracted.get('product_name', '미상')}
-- 수출 적합성 판정: {verdict_src}
-- 소매 참조가 (CLP): {ref_display}
-- 참조가 원문: {extracted.get('ref_price_text', '없음')}
-- HS 코드: {extracted.get('hs_code', '미상')}
-- 시장: {market_label}
-- 현재 환율: 1 USD = {usd_clp:.2f} CLP / 1 USD = {usd_krw:.2f} KRW (실시간 Yahoo Finance)
-- 경쟁사 가격: {competitor_json}
-- 시장 맥락: {extracted.get('market_context', '정보 없음')}
-
-## 칠레 시장 세금·규제 구조 (반드시 반영)
-- IVA (부가세): 19% → 소매가 ÷ 1.19 = 세전가
-- 수입 관세: 6% (HS 3004, FTA 적용 시 0%)
-- 소매 마진: 민간 약국 체인 25-35%, 공공 채널 10-15%
-- 파트너(유통사) 마진: 15-25%
-
-## 요청
-1. CLP 소매 참조가에서 역산하여 FOB USD 수출 권고가를 산정하세요:
-   공공: CLP 소매가 → 공공 할인(–15%) → ÷ 1.19 IVA → × (1 – 관세6%) → ÷ 파트너마진 = FOB USD
-   민간: CLP 소매가 → ÷ 1.19 IVA → × (1 – 소매마진30%) → × (1 – 파트너마진20%) → × (1 – 관세6%) = FOB USD
-2. 시나리오는 공격·평균·보수 3개로 구분하세요. 각 시나리오마다:
-   - CLP 소매가 기준 및 FOB USD 역산가 모두 표시
-   - 가격 근거·포지셔닝 전략·적합 상황을 포함한 한 문단(3-4문장)으로 reason 작성
-   - 구체적인 역산 계산식을 formula 필드에 작성
-3. rationale은 3-4문장으로 시장 근거·판정 근거·리스크를 포함해 서술하세요.
-
-아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
-{{
-  "final_price_clp": 숫자,
-  "final_price_usd": 숫자,
-  "rationale": "산정 이유 3-4문장",
-  "scenarios": [
-    {{"name": "공격", "price_clp": 숫자, "price_usd": 숫자, "reason": "저마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식 (예: CLP 5,800 ÷1.19 ×0.70 ×0.85 = USD X.XX)"}},
-    {{"name": "평균", "price_clp": 숫자, "price_usd": 숫자, "reason": "중간 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식"}},
-    {{"name": "보수", "price_clp": 숫자, "price_usd": 숫자, "reason": "고마진 포지셔닝 정의·근거·적합 상황을 포함한 한 문단", "formula": "역산 계산식"}}
-  ]
-}}
-
-CLP 참조가가 미확인이라면 칠레 시장 데이터·경쟁사·제품 특성을 기반으로 합리적인 CLP 가격을 추정하여 역산하세요."""
-
-        analysis_resp = await asyncio.to_thread(
-            lambda: client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=2048,
-                messages=[{"role": "user", "content": analysis_prompt}],
+        # ── Step 3-b: cl_pricing DB — 현지 크롤 약가 조회 ────────────────────────
+        _p2_ai_task.update({"step": "ai_analysis", "step_label": "DB 가격 데이터 조회 + AI 분석…"})
+        _pricing_ctx_p2 = ""
+        _competitor_prices_p2: list[dict] = []
+        try:
+            from utils.db import fetch_cl_pricing_context, get_client as _get_sb_p2
+            _inn_hint_p2 = extracted.get("product_name", "") or ""
+            _pricing_ctx_p2 = await asyncio.to_thread(fetch_cl_pricing_context, _inn_hint_p2, 12)
+            # 경쟁사 가격 테이블 (PDF §3 용)
+            _sb_p2 = _get_sb_p2()
+            _cp_r = await asyncio.to_thread(
+                lambda: _sb_p2.table("cl_pricing")
+                    .select("source,brand_name,inn_name,raw_price_clp,max_retail_price_clp,cenabast_supply_price_clp,awarded_price_clp")
+                    .ilike("inn_name", f"%{_inn_hint_p2[:20]}%")
+                    _sb_p2.table("cl_pricing")
+                    .select("source_site,brand_name,inn_name,raw_price_clp,cenabast_max_price_clp")
+                    .ilike("inn_name", f"%{_inn_hint_p2[:20]}%")
+                    .limit(8).execute()
             )
+            for _cp_row in (_cp_r.data or []):
+                _retail = _cp_row.get("raw_price_clp") or _cp_row.get("max_retail_price_clp")
+                _supply = _cp_row.get("cenabast_max_price_clp")
+                _price_parts = []
+                if _retail:  _price_parts.append(f"CLP {int(_retail):,} (소매)")
+                if _supply:  _price_parts.append(f"CLP {int(_supply):,} (CENABAST)")
+                _competitor_prices_p2.append({
+                    "name": _cp_row.get("source_site", "—"),
+                    "product": _cp_row.get("brand_name", "—") or "—",
+                    "ingredient": _cp_row.get("inn_name", "—"),
+                    "price": " / ".join(_price_parts) if _price_parts else "—",
+                })
+            if _pricing_ctx_p2:
+                await _emit({"phase": "p2_pipeline", "message": f"cl_pricing {len(_competitor_prices_p2)}건 로드", "level": "info"})
+        except Exception as _exc_cp:
+            await _emit({"phase": "p2_pipeline", "message": f"cl_pricing 조회 스킵: {_exc_cp}", "level": "warn"})
+
+        # ── Step 4: Claude Haiku — 공공·민간 동시 분석 (parallel) ───────────────
+        await _emit({"phase": "p2_pipeline", "message": "Claude Haiku — 공공·민간 가격 전략 동시 분석", "level": "info"})
+
+        pub_analysis, priv_analysis = await asyncio.gather(
+            _analyze_market_haiku(client, extracted, exchange_rates, "public",  _pricing_ctx_p2),
+            _analyze_market_haiku(client, extracted, exchange_rates, "private", _pricing_ctx_p2),
         )
 
-        analysis: dict[str, Any] = {}
-        try:
-            raw_analysis = analysis_resp.content[0].text
-            m_json2 = re.search(r"\{.*\}", raw_analysis, re.S)
-            if m_json2:
-                analysis = json.loads(m_json2.group(0))
-        except Exception:
-            # 폴백: CLP 소매가 기준 역산
-            base_clp = ref_price_clp or 5000
-            est_usd = round(base_clp / usd_clp * 0.35, 2) if usd_clp else round(base_clp * 0.001073 * 0.35, 2)
-            est_clp = round(base_clp * 0.35, 0)
-            analysis = {
-                "final_price_clp": est_clp,
-                "final_price_usd": est_usd,
-                "rationale": "AI 응답 파싱 중 오류가 발생했습니다. CLP 소매가 35% 역산 기본값으로 산정합니다.",
-                "scenarios": [
-                    {"name": "공격", "price_clp": round(est_clp * 0.88, 0), "price_usd": round(est_usd * 0.88, 2),
-                     "reason": "저마진 포지셔닝 — 시장 진입 초기, 가격경쟁력을 앞세워 Mercado Público 입찰·약국 채널 동시 진입을 목표로 합니다.",
-                     "formula": f"CLP {base_clp:,.0f} × 0.88 × 35% = CLP {round(est_clp * 0.88):,.0f} ≈ USD {round(est_usd * 0.88, 2):.2f}"},
-                    {"name": "평균", "price_clp": est_clp, "price_usd": est_usd,
-                     "reason": "중간 포지셔닝 — 리스크와 마진의 균형을 유지하는 기본 산정가입니다.",
-                     "formula": f"CLP {base_clp:,.0f} × 35% = CLP {est_clp:,.0f} ≈ USD {est_usd:.2f}"},
-                    {"name": "보수", "price_clp": round(est_clp * 1.12, 0), "price_usd": round(est_usd * 1.12, 2),
-                     "reason": "고마진 포지셔닝 — 제품이 칠레 시장에 안착한 후 마진율을 높여 이익 확대를 노립니다.",
-                     "formula": f"CLP {base_clp:,.0f} × 1.12 × 35% = CLP {round(est_clp * 1.12):,.0f} ≈ USD {round(est_usd * 1.12, 2):.2f}"},
-                ],
-            }
+        # 각 시장의 ref_price 결정 (공공=낙찰가 추정, 민간=소매가)
+        usd_clp = exchange_rates["usd_clp"]
+        base_ref_clp = extracted.get("ref_price_clp") or 0
+        base_ref_usd = extracted.get("ref_price_usd") or (base_ref_clp / usd_clp if usd_clp and base_ref_clp else 0)
 
-        _p2_ai_task["analysis"] = analysis
+        # 공공: 소매가의 약 85% 수준이 Mercado Público 낙찰가 추정치
+        pub_ref_clp = pub_analysis.get("ref_price_clp") or round(base_ref_clp * 0.85) or base_ref_clp
+        pub_ref_usd = round(pub_ref_clp / usd_clp, 2) if usd_clp and pub_ref_clp else base_ref_usd
+        priv_ref_clp = priv_analysis.get("ref_price_clp") or base_ref_clp
+        priv_ref_usd = round(priv_ref_clp / usd_clp, 2) if usd_clp and priv_ref_clp else base_ref_usd
+
+        # formula_elements 복사 (딥카피로 독립 보장)
+        import copy
+        pub_elements  = copy.deepcopy(_CL_FOB_ELEMENTS_PUBLIC)
+        priv_elements = copy.deepcopy(_CL_FOB_ELEMENTS_PRIVATE)
+
+        # 각 시나리오에 base_usd 계산 (기준가 = ref_price / elements_product)
+        def _enrich_scenarios(scenarios: list, ref_usd: float, elements: list) -> list:
+            ep = _elements_product(elements)
+            out = []
+            for sc in scenarios:
+                fob_usd = float(sc.get("price_usd", 0))
+                base = round(fob_usd / ep, 2) if ep and fob_usd else ref_usd
+                out.append({**sc, "base_usd": base})
+            return out
+
+        pub_scenarios  = _enrich_scenarios(pub_analysis.get("scenarios", []),  pub_ref_usd,  pub_elements)
+        priv_scenarios = _enrich_scenarios(priv_analysis.get("scenarios", []), priv_ref_usd, priv_elements)
+
+        _p2_ai_task["public"] = {
+            "analysis":        pub_analysis,
+            "ref_price_clp":   pub_ref_clp,
+            "ref_price_usd":   pub_ref_usd,
+            "scenarios":       pub_scenarios,
+            "formula_elements": pub_elements,
+        }
+        _p2_ai_task["private"] = {
+            "analysis":        priv_analysis,
+            "ref_price_clp":   priv_ref_clp,
+            "ref_price_usd":   priv_ref_usd,
+            "scenarios":       priv_scenarios,
+            "formula_elements": priv_elements,
+        }
+        # 하위 호환 (기존 analysis 필드 유지)
+        _p2_ai_task["analysis"] = pub_analysis
+
         await _emit({
             "phase": "p2_pipeline",
-            "message": f"최종 분석 완료 — CLP {analysis.get('final_price_clp', 0):,.0f} / USD {analysis.get('final_price_usd', 0):.2f}",
+            "message": (
+                f"분석 완료 — 공공 FOB USD {pub_analysis.get('final_price_usd', 0):.2f} "
+                f"/ 민간 FOB USD {priv_analysis.get('final_price_usd', 0):.2f}"
+            ),
             "level": "success",
         })
 
-        # ── Step 5: PDF 보고서 생성 ───────────────────────────────────────────
+        # ── DB 적재: P2 분석 결과 → cl_analysis_p2 (공공 + 민간 각 1행) ───────
+        try:
+            from utils.db import upsert_cl_analysis_p2
+            _p2_product_name = extracted.get("product_name", "미상")
+            _p2_inn = extracted.get("inn", "")
+            _p2_market_summary = (
+                "칠레는 인구 약 1,926만 명의 남미 최대 의약품 수입국 중 하나로, "
+                "의약품 시장 규모는 약 USD 24.5억(2024)이며 수입 의존도 80%+입니다."
+            )
+            for _seg, _ana, _ref_clp, _ref_usd, _scen, _elems in [
+                ("public",  pub_analysis,  pub_ref_clp,  pub_ref_usd,  pub_scenarios,  pub_elements),
+                ("private", priv_analysis, priv_ref_clp, priv_ref_usd, priv_scenarios, priv_elements),
+            ]:
+                _p2_row: dict[str, Any] = {
+                    "product_name":     _p2_product_name,
+                    "inn":              _p2_inn,
+                    "market_segment":   _seg,
+                    # 도메인: 가격분석
+                    "final_price_clp":  _ana.get("final_price_clp"),
+                    "final_price_usd":  _ana.get("final_price_usd"),
+                    "ref_price_clp":    _ref_clp,
+                    "ref_price_usd":    _ref_usd,
+                    "rationale":        _ana.get("rationale", ""),
+                    "scenarios":        _scen,
+                    "formula_elements": _elems,
+                    # 도메인: 거시환경
+                    "market_summary":   _p2_market_summary,
+                    # 환율 (분석 시점)
+                    "exchange_usd_clp": exchange_rates.get("usd_clp"),
+                    "exchange_usd_krw": exchange_rates.get("usd_krw"),
+                }
+                await asyncio.to_thread(upsert_cl_analysis_p2, _p2_row)
+            await _emit({"phase": "p2_pipeline", "message": "P2 결과 DB 저장 완료 (cl_analysis_p2 공공·민간)", "level": "info"})
+        except Exception as _e_p2db:
+            await _emit({"phase": "p2_pipeline", "message": f"P2 DB 저장 스킵: {_e_p2db}", "level": "warn"})
+
+        # ── Step 5: PDF 보고서 생성 (공공 + 민간 합본) ──────────────────────────
         _p2_ai_task.update({"step": "report", "step_label": "PDF 생성 중…"})
-        await _emit({"phase": "p2_pipeline", "message": "2공정 PDF 보고서 생성", "level": "info"})
+        await _emit({"phase": "p2_pipeline", "message": "2공정 PDF 보고서 생성 (공공·민간 합본)", "level": "info"})
 
         from datetime import datetime, timezone as _tz_p2ai
         import re as _re2
@@ -951,29 +1395,52 @@ CLP 참조가가 미확인이라면 칠레 시장 데이터·경쟁사·제품 �
         _pdf_name_p2 = f"cl_p2_{_safe}_{_ts_p2}.pdf"
         _pdf_path_p2 = _reports_dir_p2 / _pdf_name_p2
 
-        # AI 시나리오 필드명 정규화 (PDF generator는 label/price 사용, CLP 기준)
-        raw_scenarios = analysis.get("scenarios", []) or []
-        norm_scenarios = []
-        for sc in raw_scenarios:
-            price_clp = sc.get("price_clp", 0)
-            price_usd = sc.get("price_usd", 0)
-            norm_scenarios.append({
-                "label":   sc.get("name", sc.get("label", "")),
-                "price":   price_usd,   # PDF는 USD 기준
-                "price_clp": price_clp,
-                "reason":  sc.get("reason", ""),
-                "formula": sc.get("formula", ""),
-            })
+        def _norm_scenarios(scenarios: list) -> list:
+            out = []
+            for sc in scenarios:
+                out.append({
+                    "label":   sc.get("name", sc.get("label", "")),
+                    "price":   float(sc.get("price_usd", 0)),
+                    "price_clp": float(sc.get("price_clp", 0)),
+                    "reason":  sc.get("reason", ""),
+                    "formula": sc.get("formula", ""),
+                    "market":  sc.get("market", ""),
+                })
+            return out
 
+        # 공공 시나리오에 market 태그 추가 후 합산
+        pub_norm  = [dict(s, market="public")  for s in _norm_scenarios(pub_scenarios)]
+        priv_norm = [dict(s, market="private") for s in _norm_scenarios(priv_scenarios)]
+        norm_scenarios = pub_norm + priv_norm
+
+        verdict_src = extracted.get("verdict", "미상")
         p2_data = {
-            "product_name": extracted.get("product_name", "미상"),
-            "verdict":      verdict_src,
-            "seg_label":    market_label,
-            "base_price":   analysis.get("final_price_usd", 0),
-            "formula_str":  f"CLP {analysis.get('final_price_clp', 0):,.0f} → FOB USD {analysis.get('final_price_usd', 0):.2f}",
-            "mode_label":   "AI 분석 (Claude Haiku · 칠레 IVA 역산)",
-            "scenarios":    norm_scenarios,
-            "ai_rationale": [analysis.get("rationale", "")],
+            "product_name":    extracted.get("product_name", "미상"),
+            "inn_label":       extracted.get("product_name", ""),
+            "verdict":         verdict_src,
+            "seg_label":       "공공 시장 + 민간 시장 통합",
+            "base_price":      pub_analysis.get("final_price_usd", 0),
+            "formula_str": (
+                f"공공 FOB USD {pub_analysis.get('final_price_usd', 0):.2f} / "
+                f"민간 FOB USD {priv_analysis.get('final_price_usd', 0):.2f}"
+            ),
+            "mode_label":      "AI 분석 (Claude Haiku · 칠레 IVA 역산 · 공공+민간)",
+            "scenarios":       norm_scenarios,
+            "ai_rationale": [
+                pub_analysis.get("rationale", ""),
+                priv_analysis.get("rationale", ""),
+            ],
+            # §3 크롤 경쟁가 (Cruz Verde / Salcobrand / CENABAST 실측)
+            "competitor_prices": _competitor_prices_p2,
+            # §1 칠레 거시 시장 요약
+            "market_summary": (
+                "칠레는 인구 약 1,926만 명의 남미 최대 의약품 수입국 중 하나로, "
+                "의약품 시장 규모는 약 USD 24.5억(2024)이며 수입 의존도 80%+입니다. "
+                "공공(FONASA·CENABAST)과 민간(ISAPRE·Cruz Verde·Salcobrand·Farmacias Ahumada) "
+                "이중 구조로 운영되며 ISP(Instituto de Salud Pública)가 등록·허가를 담당합니다."
+            ),
+            "public_data_src":  "Mercado Público 낙찰가, CENABAST Ley 21.198 공급가, DB 크롤 데이터",
+            "private_data_src": "Cruz Verde · Salcobrand · Farmacias Ahumada 소매가, DB 크롤 데이터",
         }
 
         from report_generator import render_p2_pdf
@@ -1038,13 +1505,15 @@ async def trigger_p2_pipeline(body: P2PipelineBody) -> JSONResponse:
         raise HTTPException(404, f"보고서 파일을 찾을 수 없습니다: {body.report_filename or '(최신 PDF 없음)'}")
 
     _p2_ai_task = {
-        "status":   "running",
-        "step":     "extract",
-        "step_label": "시작 중…",
-        "extracted": None,
+        "status":        "running",
+        "step":          "extract",
+        "step_label":    "시작 중…",
+        "extracted":     None,
         "exchange_rates": None,
-        "analysis": None,
-        "pdf":      None,
+        "analysis":      None,   # 하위호환
+        "public":        None,
+        "private":       None,
+        "pdf":           None,
     }
     asyncio.create_task(_run_p2_ai_pipeline(str(report_path), body.market))
     return JSONResponse({"ok": True})
@@ -1058,7 +1527,7 @@ async def p2_pipeline_status_ai() -> JSONResponse:
         "status":     _p2_ai_task.get("status", "idle"),
         "step":       _p2_ai_task.get("step", ""),
         "step_label": _p2_ai_task.get("step_label", ""),
-        "has_result": _p2_ai_task.get("analysis") is not None,
+        "has_result": _p2_ai_task.get("public") is not None,
         "has_pdf":    bool(_p2_ai_task.get("pdf")),
     })
 
@@ -1071,9 +1540,48 @@ async def p2_pipeline_result_ai() -> JSONResponse:
         "status":         _p2_ai_task.get("status"),
         "extracted":      _p2_ai_task.get("extracted"),
         "exchange_rates": _p2_ai_task.get("exchange_rates"),
-        "analysis":       _p2_ai_task.get("analysis"),
+        "public":         _p2_ai_task.get("public"),
+        "private":        _p2_ai_task.get("private"),
+        "analysis":       _p2_ai_task.get("analysis"),   # 하위호환
         "pdf":            _p2_ai_task.get("pdf"),
     })
+
+
+# ── 크롤링 파이프라인 ────────────────────────────────────────────────────────────
+
+@app.post("/api/cl/crawl/prices")
+async def trigger_price_crawl() -> JSONResponse:
+    """Cruz Verde · Salcobrand · Ahumada · CENABAST · Mercado Público 가격 크롤링 트리거."""
+    global _crawl_task
+    if _crawl_task.get("status") == "running":
+        return JSONResponse({"ok": False, "msg": "이미 실행 중입니다."})
+    _crawl_task = {"status": "running", "started_at": datetime.utcnow().isoformat(), "rows_saved": 0, "error": None}
+
+    async def _do_crawl():
+        global _crawl_task
+        try:
+            from utils.cl_pricing_pipeline import run_all_crawlers
+            from utils.db import upsert_cl_pricing
+            from analysis.ch_export_analyzer import _FALLBACK_PRODUCT_META
+
+            inn_names = list({m.get("inn", "").split()[0] for m in _FALLBACK_PRODUCT_META if m.get("inn")})
+            rows = await run_all_crawlers(inn_names)
+            saved = 0
+            for row in rows:
+                if "error" not in row and row.get("inn_name"):
+                    if upsert_cl_pricing(row):
+                        saved += 1
+            _crawl_task.update({"status": "done", "rows_saved": saved, "finished_at": datetime.utcnow().isoformat()})
+        except Exception as exc:
+            _crawl_task.update({"status": "error", "error": str(exc)[:300]})
+
+    asyncio.create_task(_do_crawl())
+    return JSONResponse({"ok": True, "msg": "크롤링 시작됨"})
+
+
+@app.get("/api/cl/crawl/status")
+async def crawl_status() -> JSONResponse:
+    return JSONResponse(_crawl_task if _crawl_task else {"status": "idle"})
 
 
 # ── products 조회 ─────────────────────────────────────────────────────────────
@@ -1255,6 +1763,45 @@ async def _run_buyer_pipeline(
         ranked = rank_companies(enriched, active_criteria=active_criteria, top_n=10)
         _buyer_task["buyers"] = ranked
         await _log(f"Top {len(ranked)}개 바이어 선정 완료", "success")
+
+        # ── DB 적재: P3 바이어 분석 결과 → cl_analysis_p3 ───────────────────
+        try:
+            from utils.db import upsert_cl_analysis_p3
+            _saved_p3 = 0
+            for _rank_idx, _buyer in enumerate(ranked, start=1):
+                _p3_row: dict[str, Any] = {
+                    "company_name":    (_buyer.get("company_name") or _buyer.get("name", ""))[:255],
+                    "company_country": _buyer.get("country", ""),
+                    "product_label":   product_label,
+                    "product_key":     product_key,
+                    # 도메인: 기업 개요
+                    "company_overview_kr": _buyer.get("company_overview_kr", ""),
+                    "revenue":         _buyer.get("revenue", ""),
+                    "employees":       _buyer.get("employees", ""),
+                    "founded":         _buyer.get("founded", ""),
+                    "territories":     _buyer.get("territories", []),
+                    "certifications":  _buyer.get("certifications", []),
+                    # 도메인: 자격 검증
+                    "has_gmp":         _buyer.get("has_gmp"),
+                    "import_history":  _buyer.get("import_history"),
+                    "has_pharmacy_chain": _buyer.get("has_pharmacy_chain"),
+                    "public_channel":  _buyer.get("public_channel"),
+                    "private_channel": _buyer.get("private_channel"),
+                    "mah_capable":     _buyer.get("mah_capable"),
+                    "procurement_history": _buyer.get("procurement_history"),
+                    "korea_experience": _buyer.get("korea_experience", ""),
+                    "has_target_country_presence": _buyer.get("has_target_country_presence"),
+                    # 도메인: 추천 근거
+                    "recommendation_reason": _buyer.get("recommendation_reason", ""),
+                    "score":           _buyer.get("score"),
+                    "rank_position":   _rank_idx,
+                    "source_urls":     _buyer.get("source_urls", []),
+                }
+                if await asyncio.to_thread(upsert_cl_analysis_p3, _p3_row):
+                    _saved_p3 += 1
+            await _log(f"P3 결과 DB 저장 완료 — {_saved_p3}개사 (cl_analysis_p3)", "info")
+        except Exception as _e_p3db:
+            await _log(f"P3 DB 저장 스킵: {_e_p3db}", "warn")
 
         # ── Step 4: PDF 보고서 생성 ───────────────────────────────────────
         _buyer_task.update({"step": "report", "step_label": "PDF 생성 중…"})
@@ -1477,15 +2024,17 @@ class ClCrawlBody(BaseModel):
 
 @app.post("/api/cl/crawl")
 async def trigger_cl_crawl(body: ClCrawlBody | None = None) -> JSONResponse:
-    """칠레 5개 소스 크롤링 실행."""
+    """칠레 5개 소스 크롤링 실행 (v2: INN 정규화 + 이상치 탐지 적용)."""
     req = body if body is not None else ClCrawlBody()
     if _cl_crawl_cache["running"]:
         raise HTTPException(status_code=409, detail="CL 크롤링이 이미 실행 중입니다.")
 
     async def _run() -> None:
+        import time as _time
         _cl_crawl_cache["running"] = True
         results: list[dict[str, Any]] = []
         try:
+            # ── 크롤링 ──────────────────────────────────────────────────────
             for src in req.sources:
                 await _emit({"phase": "cl_crawl", "message": f"{src} 크롤링 시작", "level": "info"})
                 try:
@@ -1503,19 +2052,83 @@ async def trigger_cl_crawl(body: ClCrawlBody | None = None) -> JSONResponse:
                         continue
                     rows = await crawl(req.inn_names)
                     results.extend(rows)
-                    await _emit({"phase": "cl_crawl", "message": f"{src} {len(rows)}건 수집", "level": "success"})
+                    ok_cnt  = sum(1 for r in rows if "error" not in r)
+                    err_cnt = len(rows) - ok_cnt
+                    msg     = f"{src} {ok_cnt}건 수집" + (f" ({err_cnt}건 오류)" if err_cnt else "")
+                    await _emit({"phase": "cl_crawl", "message": msg,
+                                 "level": "success" if ok_cnt else "warn"})
                 except Exception as exc:
                     await _emit({"phase": "cl_crawl", "message": f"{src} 오류: {exc}", "level": "error"})
 
-            if req.save_db and results:
+            # ── 후처리: INN 정규화 + 이상치 탐지 ───────────────────────────
+            try:
+                from utils.cl_inn_normalizer import get_normalizer as _get_norm
+                from utils.cl_outlier_detector import flag_record as _flag_record
+
+                inn_norm = _get_norm()
+                # 정상 레코드만 후처리
+                clean_raw = [
+                    r for r in results
+                    if "error" not in r and r.get("raw_price_clp") is not None
+                ]
+
+                # inn_name 그룹별 기존 가격 집계 (배치 내 비교)
+                _price_groups: dict[str, list[float]] = {}
+                for r in clean_raw:
+                    key = (r.get("inn_name") or "").lower()
+                    _price_groups.setdefault(key, [])
+
+                enriched: list[dict[str, Any]] = []
+                for r in clean_raw:
+                    # INN 정규화
+                    rec = inn_norm.normalize_record(r)
+                    # crawled_at 타임스탬프 추가
+                    rec["crawled_at"] = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+                    # 이상치 탐지
+                    key = (rec.get("inn_name") or "").lower()
+                    existing = _price_groups.get(key, [])
+                    rec = _flag_record(rec, existing)
+                    # 이 레코드의 가격을 그룹에 추가 (다음 레코드 비교용)
+                    price_f = rec.get("raw_price_clp")
+                    if price_f is not None:
+                        _price_groups.setdefault(key, []).append(float(price_f))
+                    enriched.append(rec)
+
+                flagged_cnt = sum(1 for r in enriched if r.get("outlier_flagged"))
+                await _emit({
+                    "phase": "cl_crawl",
+                    "message": (
+                        f"후처리 완료 — INN 정규화 {len(enriched)}건"
+                        + (f", 이상치 플래그 {flagged_cnt}건" if flagged_cnt else "")
+                    ),
+                    "level": "info",
+                })
+
+            except Exception as exc_post:
+                await _emit({"phase": "cl_crawl", "message": f"후처리 경고: {exc_post}", "level": "warn"})
+                enriched = [
+                    {**r, "crawled_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())}
+                    for r in results
+                    if "error" not in r and r.get("raw_price_clp") is not None
+                ]
+
+            # ── DB 저장 ─────────────────────────────────────────────────────
+            if req.save_db and enriched:
                 try:
                     from utils.db import get_supabase_client
                     sb = get_supabase_client()
-                    # 오류 행 제외
-                    clean = [r for r in results if "error" not in r and r.get("raw_price_clp") is not None]
-                    if clean:
-                        sb.table("cl_pricing").insert(clean).execute()
-                        await _emit({"phase": "cl_crawl", "message": f"DB 저장 완료 ({len(clean)}건)", "level": "success"})
+                    # ocds_data 등 직렬화 불가 필드 제거
+                    _REMOVE_FIELDS = {"ocds_data", "raw_text"}
+                    db_rows = [
+                        {k: v for k, v in r.items() if k not in _REMOVE_FIELDS}
+                        for r in enriched
+                    ]
+                    sb.table("cl_pricing").insert(db_rows).execute()
+                    await _emit({
+                        "phase": "cl_crawl",
+                        "message": f"DB 저장 완료 ({len(db_rows)}건)",
+                        "level": "success",
+                    })
                 except Exception as exc_db:
                     await _emit({"phase": "cl_crawl", "message": f"DB 저장 실패: {exc_db}", "level": "warn"})
 
