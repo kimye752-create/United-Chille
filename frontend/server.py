@@ -1257,9 +1257,6 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
             _sb_p2 = _get_sb_p2()
             _cp_r = await asyncio.to_thread(
                 lambda: _sb_p2.table("cl_pricing")
-                    .select("source,brand_name,inn_name,raw_price_clp,max_retail_price_clp,cenabast_supply_price_clp,awarded_price_clp")
-                    .ilike("inn_name", f"%{_inn_hint_p2[:20]}%")
-                    _sb_p2.table("cl_pricing")
                     .select("source_site,brand_name,inn_name,raw_price_clp,cenabast_max_price_clp")
                     .ilike("inn_name", f"%{_inn_hint_p2[:20]}%")
                     .limit(8).execute()
