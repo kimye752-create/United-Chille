@@ -2354,13 +2354,13 @@ function p3CheckAll(checked) {
   p3ReRank();
 }
 
-/** 바이어 발굴 중 스켈레톤 리스트 표시 (Top 10 번호만 보임) */
+/** 바이어 발굴 중 스켈레톤 리스트 표시 */
 function _showP3Skeleton() {
   const wrap = document.getElementById('p3-cards');
   if (!wrap) return;
   wrap.innerHTML = Array.from({ length: 10 }, (_, i) => `
-    <div class="p3-skeleton-row">
-      <span class="p3-skel-rank">${i + 1}</span>
+    <div class="p3-list-row p3-list-skel">
+      <span class="p3-list-rank">${i + 1}</span>
       <div class="p3-skel-bar" style="width:${55 + Math.random() * 30 | 0}%"></div>
     </div>`).join('');
   document.getElementById('p3-result-section').style.display = '';
@@ -2384,7 +2384,7 @@ async function p3ReRank() {
   }
 }
 
-/** Top 10 카드 렌더링 */
+/** Top 10 리스트 렌더링 (팀장 사이트 스타일 — 번호+이름 행) */
 function _renderP3Cards(buyers) {
   const wrap = document.getElementById('p3-cards');
   if (!wrap) return;
@@ -2394,45 +2394,19 @@ function _renderP3Cards(buyers) {
     return;
   }
 
-  const rankEmoji = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
-
   wrap.innerHTML = buyers.map((b, i) => {
-    const pri       = b.priority === 1 ? 1 : 2;
-    const priLabel  = pri === 1 ? '성분 일치' : 'Chile';
-    const priClass  = pri === 1 ? 'p3-tag-p1' : 'p3-tag-p2';
-    const matched   = (b.matched_ingredients || []).join(' · ') || '';
-    const score     = b.composite_score ?? 0;
-    const country   = b.country || '-';
-    const email     = b.email   || '-';
-    const phone     = b.phone   || '-';
-    const category  = b.category|| '-';
-
-    // 유효한 태그만 표시
-    const tags = [];
-    if (b.enriched?.has_gmp)         tags.push('GMP인증');
-    if (b.enriched?.mah_capable)     tags.push('MAH가능');
-    if (b.enriched?.public_channel)  tags.push('공공채널');
-    if (b.enriched?.private_channel) tags.push('민간채널');
-    if (b.enriched?.korea_experience && b.enriched.korea_experience !== '-' && b.enriched.korea_experience !== '없음')
-                                     tags.push('한국거래');
-    const tagHtml = tags.map(t => `<span class="p3-tag p3-tag-info">${_escHtml(t)}</span>`).join('');
-
+    const country  = b.country  || '';
+    const category = b.category || '';
+    const pri      = b.priority === 1 ? 1 : 2;
+    const priLabel = pri === 1 ? '성분 일치' : 'Chile';
+    const priClass = pri === 1 ? 'p3-tag-p1' : 'p3-tag-p2';
+    const meta     = [country, category].filter(Boolean).join(' · ');
     return `
-      <div class="p3-card" onclick="showBuyerDetail(${i})" style="cursor:pointer;">
-        <div class="p3-card-top">
-          <span class="p3-card-rank">${rankEmoji[i] || (i+1)+'위'}</span>
-          <span class="p3-tag ${priClass}">${priLabel}</span>
-          <span class="p3-card-score">${score.toFixed(1)}점</span>
-        </div>
-        <div class="p3-card-name">${_escHtml(b.company_name || '-')}</div>
-        <div class="p3-card-country">${_escHtml(country)} · ${_escHtml(category)}</div>
-        ${matched ? `<div class="p3-card-match">🧪 ${_escHtml(matched)}</div>` : ''}
-        <div class="p3-card-contact">
-          ${email !== '-' ? `<div>✉ ${_escHtml(email)}</div>` : ''}
-          ${phone !== '-' ? `<div>☎ ${_escHtml(phone)}</div>` : ''}
-        </div>
-        ${tagHtml ? `<div class="p3-card-tags">${tagHtml}</div>` : ''}
-        <div class="p3-card-hint">클릭하여 상세 보기</div>
+      <div class="p3-list-row" onclick="showBuyerDetail(${i})">
+        <span class="p3-list-rank">${i + 1}</span>
+        <span class="p3-list-name">${_escHtml(b.company_name || '-')}</span>
+        ${meta ? `<span class="p3-list-meta">${_escHtml(meta)}</span>` : ''}
+        <span class="p3-tag ${priClass} p3-list-tag">${priLabel}</span>
       </div>`;
   }).join('');
 

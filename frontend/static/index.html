@@ -31,8 +31,6 @@
       <span class="flag-emoji">🇨🇱</span>
       <span>Chile</span>
     </div>
-    <!-- AHP 토글 -->
-    <button class="btn-ahp-toggle" id="btn-ahp-toggle" onclick="toggleAhpSection()">인도네시아 AHP ▾</button>
   </div>
 </header>
 
@@ -296,7 +294,7 @@
               <option value="">시장조사 보고서를 선택하세요.</option>
             </select>
             <button class="btn-analyze" id="btn-p3-run" onclick="runP3Pipeline()">
-              <span id="p3-run-icon">▶</span> 바이어 발굴
+              <span id="p3-run-icon">▶</span> 바이어 발굴 실행
             </button>
           </div>
           <!-- 하위 호환용 숨김 요소 -->
@@ -314,14 +312,11 @@
             </div>
           </div>
           <div class="p3-criteria-grid" id="p3-criteria-wrap" style="margin-bottom:10px;">
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="기업규모"    > 기업 규모</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="유통실적"    > 유통 실적</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="GMP보유"     > GMP 보유</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="공공채널"    > 공공 채널</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="민간채널"    > 민간 채널</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="파트너적합성"> 파트너 적합성</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="한국거래"    > 한국 거래 경험</label>
-            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="MAH가능"     > MAH 가능</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="매출규모"   checked> 매출규모</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="파이프라인" checked> 파이프라인</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="제조소보유" checked> 제조소 보유</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="수입경험"   checked> 수입 경험</label>
+            <label class="p3-chk"><input type="checkbox" class="p3-cb" value="약국체인"   checked> 약국체인 운영</label>
           </div>
 
           <div class="progress-row" id="p3-progress-row">
@@ -333,7 +328,8 @@
           <div id="p3-error-msg" class="p2-note" style="display:none;color:var(--red);"></div>
 
           <div id="p3-result-section" style="display:none; margin-top:14px;">
-            <div id="p3-cards" class="p3-cards-wrap"></div>
+            <div class="p3-top10-header">Top 10</div>
+            <div id="p3-cards" class="p3-list-wrap"></div>
           </div>
         </div>
       </div><!-- /panel 02 -->
@@ -342,40 +338,6 @@
 
   </div><!-- /page-analysis -->
 
-  <!-- ══ 인도네시아 AHP (공통 — 항상 하단) ══ -->
-  <div id="ahp-section" style="display:none; margin-top:14px;">
-    <div class="macro-grid" style="margin-bottom:14px;">
-      <div class="macro-card">
-        <div class="macro-label">분석 대상 성분</div>
-        <div class="macro-value" style="font-size:18px;">Cilostazol CR</div>
-        <div class="macro-source">서방형 200mg · 1일 1회</div>
-      </div>
-      <div class="macro-card">
-        <div class="macro-label">임상 우위 (AUC)</div>
-        <div class="macro-value" style="font-size:18px;">93.7%</div>
-        <div class="macro-source">IR 대비 동등 약효 유지</div>
-      </div>
-      <div class="macro-card">
-        <div class="macro-label">부작용 감소 (Cmax)</div>
-        <div class="macro-value" style="font-size:18px;">↓ 35.6%</div>
-        <div class="macro-source">두통·심계항진 발현 억제</div>
-      </div>
-      <div class="macro-card">
-        <div class="macro-label">AHP 후보사</div>
-        <div class="macro-value" style="font-size:18px;" id="ahp-candidate-count">—</div>
-        <div class="macro-source">GMP+MAH 필수 허들 통과</div>
-      </div>
-    </div>
-    <div class="selector-card" style="margin-bottom:14px;">
-      <div class="selector-row">
-        <button class="btn-analyze" id="btn-ahp-run" onclick="loadAhpPartners()">
-          <span id="ahp-run-icon">▶</span> AHP 점수 산출
-        </button>
-        <span id="ahp-status-msg" style="font-size:12px;color:var(--muted);margin-left:12px;"></span>
-      </div>
-    </div>
-    <div id="ahp-partner-grid" class="ahp-grid"></div>
-  </div>
 
 </main>
 
