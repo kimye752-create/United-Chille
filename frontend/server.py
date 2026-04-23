@@ -361,7 +361,7 @@ async def api_macro() -> JSONResponse:
     return JSONResponse(get_ch_macro())
 
 
-# ── 환율 (yfinance SGD/KRW) ───────────────────────────────────────────────────
+# ── 환율 (yfinance CLP/KRW) ───────────────────────────────────────────────────
 
 _exchange_cache: dict[str, Any] = {"data": None, "ts": 0.0}
 _EXCHANGE_TTL_SEC = 0.0
@@ -561,7 +561,7 @@ async def _run_pipeline_for_product(product_key: str) -> None:
                     references=_refs_map,
                 )
             )
-            _prefix = "uy_report" if product_key.startswith("UY_") else "sg_report"
+            _prefix = "uy_report" if product_key.startswith("UY_") else "cl_report"
             _pdf_name = f"{_prefix}_{product_key}_{_ts}.pdf"
             _pdf_path = _reports_dir / _pdf_name
             await asyncio.to_thread(render_pdf, _report, _pdf_path)
@@ -795,7 +795,7 @@ async def trigger_report(body: ReportBody | None = None) -> JSONResponse:
                 None, lambda: subprocess.run(cmd, capture_output=True, text=True)
             )
             reports_dir = ROOT / "reports"
-            pdfs = sorted(reports_dir.glob("sg_report_*.pdf"), reverse=True)
+            pdfs = sorted(reports_dir.glob("cl_report_*.pdf"), reverse=True)
             _report_cache["path"] = str(pdfs[0]) if pdfs else None
         finally:
             _report_cache["running"] = False
@@ -1607,7 +1607,7 @@ async def keys_status() -> dict[str, Any]:
 
 @app.get("/api/datasource/status")
 async def datasource_status() -> JSONResponse:
-    """Supabase 연결 상태, KUP 품목 수, HSA 컨텍스트 출처 반환."""
+    """Supabase 연결 상태, KUP 품목 수, ISP/CENABAST 컨텍스트 출처 반환."""
     try:
         from utils.db import get_client, fetch_kup_products
         kup_rows = fetch_kup_products("CL")

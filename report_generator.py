@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""싱가포르 시장 분석 보고서 생성기 (Supabase 기반).
+"""칠레 시장 분석 보고서 생성기 (Supabase 기반).
 
 출력 형식:
-  reports/sg_report_YYYYMMDD_HHMMSS.json  — 전체 데이터 (기계 판독용)
-  reports/sg_report_YYYYMMDD_HHMMSS.pdf   — 양식 기준 보고서 (사람 판독용)
+  reports/cl_report_YYYYMMDD_HHMMSS.json  — 전체 데이터 (기계 판독용)
+  reports/cl_report_YYYYMMDD_HHMMSS.pdf   — 양식 기준 보고서 (사람 판독용)
 
 PDF 구조 (품목별 2페이지):
   페이지1: 회사명·제목·제품 바·1 판정·2 근거(시장/규제/무역+PBS 참고가)·3 전략(채널·가격·리스크)
@@ -37,60 +37,60 @@ except ImportError:
 # ── 8개 품목 기대 product_id ──────────────────────────────────────────────────
 
 _EXPECTED_PRODUCTS = [
-    "SG_omethyl_omega3_2g",
-    "SG_sereterol_activair",
-    "SG_hydrine_hydroxyurea_500",
-    "SG_gadvoa_gadobutrol_604",
-    "SG_rosumeg_combigel",
-    "SG_atmeg_combigel",
-    "SG_ciloduo_cilosta_rosuva",
-    "SG_gastiin_cr_mosapride",
+    "CL_omethyl_omega3_2g",
+    "CL_sereterol_activair",
+    "CL_hydrine_hydroxyurea_500",
+    "CL_gadvoa_gadobutrol_604",
+    "CL_rosumeg_combigel",
+    "CL_atmeg_combigel",
+    "CL_ciloduo_cilosta_rosuva",
+    "CL_gastiin_cr_mosapride",
 ]
 
 _TRADE_NAMES = {
-    "SG_hydrine_hydroxyurea_500": "Hydrine",
-    "SG_gadvoa_gadobutrol_604": "Gadvoa Inj.",
-    "SG_sereterol_activair": "Sereterol Activair",
-    "SG_omethyl_omega3_2g": "Omethyl",
-    "SG_rosumeg_combigel": "Rosumeg Combigel",
-    "SG_atmeg_combigel": "Atmeg Combigel",
-    "SG_ciloduo_cilosta_rosuva": "Ciloduo",
-    "SG_gastiin_cr_mosapride": "Gastiin CR",
+    "CL_hydrine_hydroxyurea_500": "Hydrine",
+    "CL_gadvoa_gadobutrol_604": "Gadvoa Inj.",
+    "CL_sereterol_activair": "Sereterol Activair",
+    "CL_omethyl_omega3_2g": "Omethyl",
+    "CL_rosumeg_combigel": "Rosumeg Combigel",
+    "CL_atmeg_combigel": "Atmeg Combigel",
+    "CL_ciloduo_cilosta_rosuva": "Ciloduo",
+    "CL_gastiin_cr_mosapride": "Gastiin CR",
 }
 
 _INN_NAMES = {
-    "SG_hydrine_hydroxyurea_500": "Hydroxyurea 500mg",
-    "SG_gadvoa_gadobutrol_604": "Gadobutrol 604.72mg",
-    "SG_sereterol_activair": "Fluticasone / Salmeterol",
-    "SG_omethyl_omega3_2g": "Omega-3-Acid Ethyl Esters 90 2g",
-    "SG_rosumeg_combigel": "Rosuvastatin + Omega-3-EE90",
-    "SG_atmeg_combigel": "Atorvastatin + Omega-3-EE90",
-    "SG_ciloduo_cilosta_rosuva": "Cilostazol + Rosuvastatin",
-    "SG_gastiin_cr_mosapride": "Mosapride Citrate",
+    "CL_hydrine_hydroxyurea_500": "Hydroxyurea 500mg",
+    "CL_gadvoa_gadobutrol_604": "Gadobutrol 604.72mg",
+    "CL_sereterol_activair": "Fluticasone / Salmeterol",
+    "CL_omethyl_omega3_2g": "Omega-3-Acid Ethyl Esters 90 2g",
+    "CL_rosumeg_combigel": "Rosuvastatin + Omega-3-EE90",
+    "CL_atmeg_combigel": "Atorvastatin + Omega-3-EE90",
+    "CL_ciloduo_cilosta_rosuva": "Cilostazol + Rosuvastatin",
+    "CL_gastiin_cr_mosapride": "Mosapride Citrate",
 }
 
 # ── HS 코드 및 패키징 정보 ─────────────────────────────────────────────────────
 
 _HS_CODES: dict[str, str] = {
-    "SG_omethyl_omega3_2g":       "3004.90",  # 개량신약
-    "SG_sereterol_activair":      "3004.90",  # 일반제 (흡입제)
-    "SG_hydrine_hydroxyurea_500": "3004.90",  # 항암제
-    "SG_gadvoa_gadobutrol_604":   "3006.30",  # 조영제
-    "SG_rosumeg_combigel":        "3004.90",  # 개량신약
-    "SG_atmeg_combigel":          "3004.90",  # 개량신약
-    "SG_ciloduo_cilosta_rosuva":  "3004.90",  # 개량신약
-    "SG_gastiin_cr_mosapride":    "3004.90",  # 개량신약
+    "CL_omethyl_omega3_2g":       "3004.90",  # 개량신약
+    "CL_sereterol_activair":      "3004.90",  # 일반제 (흡입제)
+    "CL_hydrine_hydroxyurea_500": "3004.90",  # 항암제
+    "CL_gadvoa_gadobutrol_604":   "3006.30",  # 조영제
+    "CL_rosumeg_combigel":        "3004.90",  # 개량신약
+    "CL_atmeg_combigel":          "3004.90",  # 개량신약
+    "CL_ciloduo_cilosta_rosuva":  "3004.90",  # 개량신약
+    "CL_gastiin_cr_mosapride":    "3004.90",  # 개량신약
 }
 
 _PACKAGING: dict[str, str] = {
-    "SG_omethyl_omega3_2g":       "Omega-3-Acid Ethyl Esters 90 / 2g / Pouch",
-    "SG_sereterol_activair":      "Fluticasone 250μg·500μg + Salmeterol 50μg / Inhaler",
-    "SG_hydrine_hydroxyurea_500": "Hydroxyurea 500mg / Cap.",
-    "SG_gadvoa_gadobutrol_604":   "Gadobutrol 604.72mg / PFS 5mL·7.5mL",
-    "SG_rosumeg_combigel":        "Rosuvastatin 5·10mg + Omega-3-EE90 1g / Cap.",
-    "SG_atmeg_combigel":          "Atorvastatin 10mg + Omega-3-EE90 1g / Cap.",
-    "SG_ciloduo_cilosta_rosuva":  "Cilostazol 200mg + Rosuvastatin 10·20mg / Tab.",
-    "SG_gastiin_cr_mosapride":    "Mosapride Citrate 15mg / Tab.",
+    "CL_omethyl_omega3_2g":       "Omega-3-Acid Ethyl Esters 90 / 2g / Pouch",
+    "CL_sereterol_activair":      "Fluticasone 250μg·500μg + Salmeterol 50μg / Inhaler",
+    "CL_hydrine_hydroxyurea_500": "Hydroxyurea 500mg / Cap.",
+    "CL_gadvoa_gadobutrol_604":   "Gadobutrol 604.72mg / PFS 5mL·7.5mL",
+    "CL_rosumeg_combigel":        "Rosuvastatin 5·10mg + Omega-3-EE90 1g / Cap.",
+    "CL_atmeg_combigel":          "Atorvastatin 10mg + Omega-3-EE90 1g / Cap.",
+    "CL_ciloduo_cilosta_rosuva":  "Cilostazol 200mg + Rosuvastatin 10·20mg / Tab.",
+    "CL_gastiin_cr_mosapride":    "Mosapride Citrate 15mg / Tab.",
 }
 
 # verdict 기반 확률 매핑 — 하드코딩 수치 제거
@@ -104,19 +104,22 @@ _VERDICT_TO_PROB: dict[str | None, float] = {
 def _get_success_prob(verdict: str | None) -> float:
     return _VERDICT_TO_PROB.get(verdict, 0.00)
 
-# 품목별 관련 사이트 (양식 §1) — 가격/GeBIZ 제거
+# 품목별 관련 사이트 (양식 §1) — 가격/Mercado Público 제거
 _RELATED_SITES: dict[str, dict[str, list[tuple[str, str]]]] = {
     pid: {
         "public": [
-            ("HSA eService Portal", "https://www.hsa.gov.sg/e-services"),
-            ("MOH Singapore", "https://www.moh.gov.sg"),
-            ("data.gov.sg", "https://data.gov.sg"),
+            ("ISP (칠레 의약품안전청)", "https://www.ispch.cl"),
+            ("MINSAL (칠레 보건부)", "https://www.minsal.cl"),
+            ("CENABAST (공공조달청)", "https://www.cenabast.cl"),
         ],
-        "private": [],
+        "private": [
+            ("Salcobrand 약국", "https://www.salcobrand.cl"),
+            ("Cruz Verde 약국", "https://www.cruzverde.cl"),
+        ],
         "papers": [
             ("PubMed Central", "https://www.ncbi.nlm.nih.gov/pmc"),
-            ("싱가포르 보건부 Clinical Practice Guidelines",
-             "https://www.moh.gov.sg/resources-statistics/guidelines-and-guidelines"),
+            ("칠레 MINSAL 임상 가이드라인",
+             "https://www.minsal.cl/medicamentos/"),
         ],
     }
     for pid in _EXPECTED_PRODUCTS
@@ -126,9 +129,9 @@ _RELATED_SITES: dict[str, dict[str, list[tuple[str, str]]]] = {
 # ── 데이터 로드 ───────────────────────────────────────────────────────────────
 
 def load_products() -> list[dict]:
-    """Supabase products 테이블에서 KUP 싱가포르 품목을 조회."""
+    """Supabase products 테이블에서 KUP 칠레 품목을 조회."""
     from utils.db import fetch_kup_products
-    return fetch_kup_products("SG")
+    return fetch_kup_products("CL")
 
 
 # ── 보고서 데이터 조합 ────────────────────────────────────────────────────────
@@ -204,7 +207,7 @@ def build_report(
         item["pbs_search_hit"] = ana.get("pbs_search_hit")
         item["pbs_fetch_error"] = ana.get("pbs_fetch_error")
         item["risks_conditions"] = ana.get("risks_conditions", "")
-        item["hsa_reg"] = ana.get("hsa_reg", "")
+        item["hsa_reg"] = ana.get("isp_reg", "") or ana.get("hsa_reg", "")
         item["product_type"] = ana.get("product_type", "")
         item["analysis_sources"] = ana.get("sources", [])
         item["analysis_model"] = ana.get("analysis_model", "")
@@ -257,16 +260,16 @@ def build_report(
 
         # DB/기관별 정적 설명 매핑 — 이름 키워드 기반으로 적절한 설명 선택
         _DB_DESC_MAP: dict[str, str] = {
-            "SG:kup_pipeline":          "KU Pharma 내부 파이프라인 DB — 제품 식별자·시장 세그먼트·규제 ID·신뢰도 점수 보유",
-            "Supabase Database":        "KU Pharma 내부 Supabase DB — 제품별 시장 세그먼트·규제 식별자·신뢰도 점수 관리",
-            "KU Pharma Pipeline":       "KU Pharma 내부 Supabase DB — 제품별 시장 세그먼트·규제 식별자·신뢰도 점수 관리",
-            "HSA Therapeutic":          "싱가포르 HSA 공식 의약품 등록 DB — 등록 번호·승인일·성분명·레퍼런스 제품 정보 조회",
-            "HSA Singapore":            "싱가포르 HSA 공식 의약품 등록 DB — 등록 번호·승인일·성분명·레퍼런스 제품 정보 조회",
-            "PBS Public Schedule":      "호주 PBS 공개 스케줄 — DPMQ 기준 약가 및 등재 여부(미등재 204 포함). 싱가포르 약가와 직접 동일시 불가",
-            "PBS Australia":            "호주 PBS 공개 스케줄 — DPMQ 기준 약가 및 등재 여부(미등재 204 포함). 싱가포르 약가와 직접 동일시 불가",
-            "GeBIZ":                    "싱가포르 정부 공공조달 플랫폼(GeBIZ) — 발주기관별 tender 이력·낙찰 품목·의약품 수요 규모 조회",
-            "Perplexity":               "Perplexity 실시간 규제 검색 — HSA 최신 공지·임상 가이드라인·학술 논문 링크 실시간 보완",
-            "NDF":                      "싱가포르 국가 약제 포뮬러리(NDF) — 공립 병원 처방 허용 목록·포뮬러리 등재 현황 조회",
+            "CL:kup_pipeline":          "KU Pharma 내부 파이프라인 DB — 칠레 품목 식별자·시장 세그먼트·규제 ID·신뢰도 점수 보유",
+            "Supabase Database":        "KU Pharma 내부 Supabase DB — 칠레 품목별 시장 세그먼트·규제 식별자·신뢰도 점수 관리",
+            "KU Pharma Pipeline":       "KU Pharma 내부 Supabase DB — 칠레 품목별 시장 세그먼트·규제 식별자·신뢰도 점수 관리",
+            "ISP":                      "칠레 ISP(의약품안전청) 공식 의약품 등록 DB — 등록 번호·승인일·성분명·레퍼런스 제품 정보 조회",
+            "CENABAST":                 "칠레 CENABAST(공공의약품조달청) — 공공 입찰 낙찰가·품목 등재 현황·공공채널 참고가 조회",
+            "Salcobrand":               "칠레 최대 약국 체인 Salcobrand — 소매 참고가·제품 재고·성분별 경쟁 제품 현황",
+            "Cruz Verde":               "칠레 주요 약국 체인 Cruz Verde — 소매 참고가·제품 재고 정보",
+            "Mercado Público":          "칠레 정부 공공조달 플랫폼(Mercado Público) — 발주기관별 입찰 이력·의약품 수요 규모 조회",
+            "Perplexity":               "Perplexity 실시간 규제 검색 — ISP 최신 공지·임상 가이드라인·학술 논문 링크 실시간 보완",
+            "MINSAL":                   "칠레 보건부(MINSAL) — 국가 의약품 정책·필수 의약품 목록(FNMCH)·임상 가이드라인 조회",
         }
 
         def _resolve_db_desc(name: str) -> str:
@@ -305,16 +308,16 @@ def build_report(
                     "url": url,
                 }
             )
-        pbs_url = item.get("pbs_listing_url")
-        if isinstance(pbs_url, str) and pbs_url.strip():
+        cenabast_url = item.get("cenabast_listing_url") or item.get("pbs_listing_url")
+        if isinstance(cenabast_url, str) and cenabast_url.strip():
             if not any(
-                d.get("url", "") == pbs_url.strip() for d in used_data_sources
+                d.get("url", "") == cenabast_url.strip() for d in used_data_sources
             ):
                 used_data_sources.append(
                     {
-                        "name": "PBS Australia",
-                        "description": _resolve_db_desc("PBS Australia"),
-                        "url": pbs_url.strip(),
+                        "name": "CENABAST",
+                        "description": _resolve_db_desc("CENABAST"),
+                        "url": cenabast_url.strip(),
                     }
                 )
         item["used_data_sources"] = used_data_sources
@@ -331,26 +334,26 @@ def build_report(
     return {
         "meta": {
             "generated_at": generated_at,
-            "country": "SG",
-            "currency": "SGD",
+            "country": "CL",
+            "currency": "CLP",
             "total_products": total,
             "verdict_summary": verdict_counts,
             "data_sources": [
-                "HSA (Supabase)",
+                "ISP / CENABAST (Supabase)",
                 "WHO EML (Supabase)",
                 "GLOBOCAN (Supabase)",
                 "규제 PDF",
                 "Perplexity API",
-                "PBS Australia (공개 스케줄, 방법론적 추산)",
+                "Salcobrand 소매 참고가 (cl_pricing)",
             ],
             "reference_pricing": {
-                "primary_label": "(PBS, 방법론적 추산)",
-                "aud_field": "pbs_dpmq_aud (DPMQ)",
-                "sgd_note": "pbs_dpmq_sgd_hint 는 참고 환산(환율 변동)",
+                "primary_label": "(CENABAST/소매 참고가)",
+                "clp_field": "cenabast_max_price_clp / raw_price_clp",
+                "usd_note": "CLP → USD 환율 yfinance 실시간 환산",
             },
             "note": (
-                "싱가포르 공개 병원·소매 약가는 본 파이프라인에서 직접 수집하지 않습니다. "
-                "호주 PBS 공개 스케줄의 DPMQ를 (PBS, 방법론적 추산)으로 표기해 참고합니다."
+                "칠레 공공병원·소매 약가는 Salcobrand 크롤러 및 CENABAST 공개 데이터로 수집합니다. "
+                "IVA 19% 적용, 공공채널(CENABAST/Mercado Público) 입찰가 기준으로 FOB 역산합니다."
             ),
         },
         "products": items,
@@ -510,18 +513,15 @@ def render_pdf(report: dict, out_path: Path) -> None:
         return Paragraph(escaped, style)
 
     def _pbs_one_line(p: dict[str, Any]) -> str:
-        aud = p.get("pbs_dpmq_aud")
-        sgd = p.get("pbs_dpmq_sgd_hint")
-        if isinstance(aud, (int, float)):
-            line = f"DPMQ AUD {aud:.2f}"
-            if isinstance(sgd, (int, float)):
-                line += f", 참고 SGD {sgd:.2f}"
-            line += " (PBS, 방법론적 추산 — 싱가포르 약가 아님)"
+        clp = p.get("cenabast_max_price_clp") or p.get("raw_price_clp")
+        if isinstance(clp, (int, float)):
+            line = f"CLP {clp:,.0f}"
+            line += " (CENABAST/소매 참고가)"
             return line
         haiku = str(p.get("pbs_haiku_estimate") or "").strip()
         if haiku:
             return haiku
-        return "PBS 미등재 — 국제 가격 벤치마크 수집 후 산출 예정"
+        return "CENABAST/소매 참고가 미수집 — 크롤러 재실행 후 산출 예정"
 
     def _triple_table(rows: list[tuple[str, str, str]]) -> Table:
         w1, w2, w3 = CONTENT_W * 0.28, CONTENT_W * 0.14, CONTENT_W * 0.58
@@ -575,7 +575,7 @@ def render_pdf(report: dict, out_path: Path) -> None:
         pagesize=A4,
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=MARGIN,  bottomMargin=MARGIN,
-        title="싱가포르 1공정 시장조사 보고서",
+        title="칠레 1공정 시장조사 보고서",
     )
 
     story: list = []
@@ -587,7 +587,7 @@ def render_pdf(report: dict, out_path: Path) -> None:
         verdict = str(product.get("verdict", "") or "미분석")
 
         # 1페이지 — 제목 + 제품 바
-        story.append(Paragraph(_rx("싱가포르 시장 분석 보고서"), s_title))
+        story.append(Paragraph(_rx("칠레 시장 분석 보고서"), s_title))
         story.append(Paragraph(_rx(generated_date), s_date))
         story.append(Spacer(1, 6))
 
@@ -758,7 +758,7 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
       product_name  : str
       verdict       : str  (적합/조건부/부적합/—)
       seg_label     : str  (공공시장/민간시장)
-      base_price    : float | None  (SGD)
+      base_price    : float | None  (CLP 또는 USD)
       formula_str   : str  (공식 텍스트)
       mode_label    : str  (직접 입력 / AI 분석)
       scenarios     : list[{label, price, reason}]
@@ -998,7 +998,7 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
         public_scs, private_scs = scenarios[:mid], scenarios[mid:]
 
     if public_scs:
-        data_src = str(p2_data.get("public_data_src", "정부 입찰가, 조달청 공시가 참고"))
+        data_src = str(p2_data.get("public_data_src", "CENABAST 입찰가, Mercado Público 공시가 참고"))
         story.append(Paragraph(_rx(f"▸ 4-1. 공공 시장  (데이터 소스: {data_src})"), s_cell_h))
         story.append(Spacer(1, 3))
         for i, sc in enumerate(public_scs):
@@ -1006,7 +1006,7 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
         story.append(Spacer(1, 6))
 
     if private_scs:
-        data_src2 = str(p2_data.get("private_data_src", "민간 병원·약국 납품가 참고"))
+        data_src2 = str(p2_data.get("private_data_src", "Salcobrand·Cruz Verde 소매 참고가"))
         story.append(Paragraph(_rx(f"▸ 4-2. 민간 시장  (데이터 소스: {data_src2})"), s_cell_h))
         story.append(Spacer(1, 3))
         for i, sc in enumerate(private_scs):
@@ -1027,7 +1027,7 @@ def render_p2_pdf(p2_data: dict, out_path: Path) -> None:
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="싱가포르 시장 분석 보고서 생성 (Supabase 기반)")
+    parser = argparse.ArgumentParser(description="칠레 시장 분석 보고서 생성 (Supabase 기반)")
     parser.add_argument("--out", default=str(ROOT / "reports"))
     parser.add_argument(
         "--analysis-json",
@@ -1061,10 +1061,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if analysis is None:
         print("[report] Claude API로 분석 실행 중... (API 키 없으면 미실행 메시지 표시)")
-        from analysis.sg_export_analyzer import analyze_all
+        from analysis.ch_export_analyzer import analyze_all
         analysis = asyncio.run(analyze_all(use_perplexity=not args.no_perplexity))
         # 분석 결과 JSON 저장
-        ana_path = out_dir / f"sg_analysis_{ts}.json"
+        ana_path = out_dir / f"cl_analysis_{ts}.json"
         ana_path.write_text(json.dumps(analysis, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[report] 분석 JSON → {ana_path}")
 
@@ -1085,12 +1085,12 @@ def main(argv: list[str] | None = None) -> int:
     report = build_report(products, generated_at, analysis, references=references)
 
     # JSON 저장
-    json_path = out_dir / f"sg_report_{ts}.json"
+    json_path = out_dir / f"cl_report_{ts}.json"
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[report] JSON → {json_path}")
 
     # PDF 저장
-    pdf_path = out_dir / f"sg_report_{ts}.pdf"
+    pdf_path = out_dir / f"cl_report_{ts}.pdf"
     render_pdf(report, pdf_path)
     print(f"[report] PDF  → {pdf_path}")
 
