@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/favicon.png"/>
   <link rel="apple-touch-icon" href="/static/favicon.png"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="/static/style.css?v=10"/>
+  <link rel="stylesheet" href="/static/style.css?v=11"/>
 </head>
 <body>
 <div class="app">
@@ -28,7 +28,7 @@
     </div>
     <!-- 국가 필 -->
     <div class="pill">
-      <span class="flag-emoji">🇨🇱</span>
+      <img src="/static/images/flag_cl.svg" alt="🇨🇱" style="height:22px;width:33px;border-radius:3px;object-fit:cover;">
       <span>Chile</span>
     </div>
   </div>
@@ -114,7 +114,6 @@
           <span class="panel-num-badge">01</span>
           <div>
             <div class="panel-title-text">수출가격 전략</div>
-            <div class="panel-title-sub">시장조사 · AI 가격 분석 · PDF 보고서</div>
           </div>
         </div>
 
@@ -285,7 +284,6 @@
           <span class="panel-num-badge">02</span>
           <div>
             <div class="panel-title-text">바이어 발굴</div>
-            <div class="panel-title-sub">CPHI 크롤링 · AI 심층조사 · 실시간 랭킹 · PDF 보고서</div>
           </div>
         </div>
 
@@ -313,7 +311,7 @@
               <button class="btn-dl-final" id="btn-p3-final-dl" onclick="downloadBuyerReport()" disabled>↓ 최종 보고서 다운로드</button>
             </div>
           </div>
-          <div class="p3-criteria-grid" id="p3-criteria-wrap" style="margin-bottom:10px;">
+          <div class="p3-criteria-grid" id="p3-criteria-wrap" style="margin-bottom:10px;display:none;">
             <label class="p3-chk"><input type="checkbox" class="p3-cb" value="매출규모"   checked> 매출규모</label>
             <label class="p3-chk"><input type="checkbox" class="p3-cb" value="파이프라인" checked> 파이프라인</label>
             <label class="p3-chk"><input type="checkbox" class="p3-cb" value="제조소보유" checked> 제조소 보유</label>
@@ -474,21 +472,16 @@ function goHeaderTab(id, el) {
 (function() {
   var map = L.map('cl-map', {
     center: [-33.4489, -70.6693],
-    zoom: 4,
+    zoom: 6,
     zoomControl: true,
     scrollWheelZoom: true,
   });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 18,
   }).addTo(map);
-  var icon = L.divIcon({
-    className: '',
-    html: '<div style="width:14px;height:14px;background:#c8564d;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 7px rgba(200,86,77,.22),0 2px 6px rgba(0,0,0,.3);"></div>',
-    iconSize: [14, 14], iconAnchor: [7, 7],
-  });
-  L.marker([-33.4489, -70.6693], { icon: icon })
-    .addTo(map).bindPopup('<b>Santiago, Chile</b>').openPopup();
+  L.marker([-33.4489, -70.6693])
+    .addTo(map).bindPopup('<b>Santiago, Chile</b>');
   window._leafletMap = map;
   setTimeout(function(){ map.invalidateSize(); }, 100);
 })();
