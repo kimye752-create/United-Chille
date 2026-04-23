@@ -1012,6 +1012,224 @@ _p2_ai_task: dict[str, Any] = {}
 # 크롤링 상태
 _crawl_task: dict[str, Any] = {}
 
+# ── P2 시스템 프롬프트 ────────────────────────────────────────────────────────
+_CLAUDE_P2_SYSTEM_PROMPT = (
+    "당신은 한국유나이티드제약(주)의 칠레 수출 전략 시니어 애널리스트입니다. "
+    "주어진 품목의 (1) 칠레 크롤링 데이터, (2) 규제·참고가 시드, (3) FOB 계산 결과를 종합해 "
+    "한국어 보고서체 블록 9개를 작성합니다.\n\n"
+
+    "【데이터 원칙 — 최우선】\n"
+    "- 입력 데이터(cl_products 등)에 없는 수치나 업체명은 절대 창작하지 않습니다.\n"
+    "- 칠레 페소(CLP)와 달러(USD) 환율은 제공된 dispatch 결과를 엄격히 따릅니다.\n"
+    "- 값이 없으면 '미확보' 또는 '칠레 현지 추가 검증 필요'로 명시합니다.\n\n"
+
+    "【칠레 특화 매핑 규칙】\n"
+    "- block_market_macro: 칠레의 안정적인 경제 지표와 수입 의존도, FONASA(국가건강보험) 시장 특성 요약.\n"
+    "- block_extract: CENABAST(공공조달청) 낙찰가 또는 약국 체인 소매가 근거 포함.\n"
+    "- block_fob_intro: 칠레 이원화 시장(Public-CENABAST / Private-Retail) 중 타겟 명시.\n"
+    "- block_strategy: segment='public'이면 CENABAST 입찰 전략, 'private'이면 대형 약국 체인 파트너십.\n"
+    "- block_risks: ISP의 생물학적 동등성(BE) 요건 강화, CLP 변동성, 인접국 가격 공세 언급.\n"
+    "- block_scenario_penetration: scenarios.aggressive 결과 기반 저가 진입 전략 설명.\n"
+    "- block_scenario_reference: scenarios.average 결과 기반 기준가 전략 설명.\n"
+    "- block_scenario_premium: scenarios.conservative 결과 기반 고가 진입 전략 설명.\n"
+    "- block_disclaimer: 본 보고서의 AI 추정 기반 면책 사항.\n\n"
+
+    "【시나리오 키 매핑 — 반드시 준수】\n"
+    "수입상(Sponsor) 마진 프리셋이 반영된 결과:\n"
+    "  scenario_penetration ← scenarios.aggressive.fob_usd  (저가 진입, 수입상마진 30%)\n"
+    "  scenario_reference   ← scenarios.average.fob_usd     (기준가 진입, 수입상마진 20%)\n"
+    "  scenario_premium     ← scenarios.conservative.fob_usd (고가 진입, 수입상마진 10%)\n"
+    "각 시나리오 설명에 fob_usd를 주값으로 인용하고, CLP를 괄호로 병기합니다.\n"
+    "각 시나리오 근거에 '수입상 마진'과 'FTA 관세 혜택'이 FOB 산정에 미친 영향을 반드시 포함합니다.\n\n"
+
+    "【출력 JSON 스키마 — 반드시 아래 형식만 출력】\n"
+    "{\n"
+    "  \"block_market_macro\": \"\",\n"
+    "  \"block_extract\": \"\",\n"
+    "  \"block_fob_intro\": \"\",\n"
+    "  \"block_strategy\": \"\",\n"
+    "  \"block_risks\": \"\",\n"
+    "  \"block_scenario_penetration\": \"\",\n"
+    "  \"block_scenario_reference\": \"\",\n"
+    "  \"block_scenario_premium\": \"\",\n"
+    "  \"block_disclaimer\": \"\",\n"
+    "  \"final_price_clp\": 0,\n"
+    "  \"final_price_usd\": 0,\n"
+    "  \"rationale\": \"\",\n"
+    "  \"ref_price_clp\": 0,\n"
+    "  \"scenarios\": {\n"
+    "    \"aggressive\":    {\"fob_usd\": 0, \"fob_clp\": 0, \"formula\": \"\", \"reason\": \"\"},\n"
+    "    \"average\":       {\"fob_usd\": 0, \"fob_clp\": 0, \"formula\": \"\", \"reason\": \"\"},\n"
+    "    \"conservative\":  {\"fob_usd\": 0, \"fob_clp\": 0, \"formula\": \"\", \"reason\": \"\"}\n"
+    "  }\n"
+    "}\n\n"
+
+    "【어투 및 품질 규칙】\n"
+    "- 한국어 존댓말('-합니다', '-습니다') 사용.\n"
+    "- 마크다운 기호(#, **, -, 백틱) 및 이모지 사용 절대 금지.\n"
+    "- 9개 block 필드 모두 공란 없이 채웁니다.\n"
+    "- JSON만 출력하며 코드블록(```) 래퍼 없이 순수 JSON 객체로 반환합니다.\n"
+)
+
+
+def _build_p2_user_message(
+    extracted: dict,
+    exchange_rates: dict,
+    market: str,
+    pricing_ctx: str = "",
+) -> str:
+    """P2 분석용 user 메시지를 구조화된 JSON 데이터로 빌드.
+
+    시스템 프롬프트가 역할·출력 형식을 처리하므로, user 메시지는 순수 데이터만 전달한다.
+    """
+    import json as _json
+    import os as _os_p2
+    usd_clp = exchange_rates.get("usd_clp", 932.0)
+    usd_krw = exchange_rates.get("usd_krw", 1393.0)
+    vat_pct = float(_os_p2.environ.get("CL_VAT_PHARMA_PCT", "19.0"))
+    import_duty_pct = float(_os_p2.environ.get("CL_IMPORT_DUTY_PCT", "6.0"))
+
+    ref_price_clp = extracted.get("ref_price_clp") or 0
+    ref_price_usd = extracted.get("ref_price_usd") or 0
+    if not ref_price_clp and ref_price_usd:
+        ref_price_clp = round(float(ref_price_usd) * usd_clp, 0)
+
+    if market == "public":
+        market_label = "공공 시장 (Mercado Público · CENABAST 공급 채널)"
+        fob_ratios   = {"aggressive": 0.28, "average": 0.35, "conservative": 0.42}
+        channel_desc = (
+            "CLP 낙찰가 → IVA 없음(공공기관 면제) → "
+            f"수입관세 {import_duty_pct}%(한-칠레 FTA 적용 시 0%) → "
+            "파트너·수입상 마진 → FOB USD"
+        )
+    else:
+        market_label = "민간 시장 (Cruz Verde / Salcobrand / Farmacias Ahumada 채널)"
+        fob_ratios   = {"aggressive": 0.25, "average": 0.31, "conservative": 0.38}
+        channel_desc = (
+            f"CLP 소매가 ÷ (1+IVA {vat_pct}%) → 약국마진 25~35% 공제 → "
+            "파트너·수입상 마진 공제 → "
+            f"수입관세 {import_duty_pct}% 공제 → FOB USD"
+        )
+
+    # FOB 역산 dispatch 계산 (프리셋)
+    dispatch_scenarios: dict = {}
+    for key, ratio in fob_ratios.items():
+        fob_usd = round(float(ref_price_clp) / usd_clp * ratio, 2) if usd_clp and ref_price_clp else 0
+        fob_clp = round(float(ref_price_clp) * ratio, 0)
+        dispatch_scenarios[key] = {
+            "fob_usd":   fob_usd,
+            "fob_clp":   fob_clp,
+            "fob_ratio": ratio,
+            "sponsor_margin_pct": {"aggressive": 30, "average": 20, "conservative": 10}[key],
+        }
+
+    payload: dict = {
+        "product": {
+            "name":            extracted.get("product_name", "미상"),
+            "inn":             extracted.get("inn", ""),
+            "hs_code":         extracted.get("hs_code", "3004.90"),
+            "verdict":         extracted.get("verdict", "미상"),
+            "market_context":  extracted.get("market_context", ""),
+        },
+        "market": {
+            "segment":         market,
+            "label":           market_label,
+            "channel_formula": channel_desc,
+        },
+        "reference_price": {
+            "clp":             ref_price_clp,
+            "usd":             ref_price_usd,
+            "text":            extracted.get("ref_price_text", "미확인"),
+        },
+        "exchange_rates": {
+            "usd_clp":         usd_clp,
+            "usd_krw":         usd_krw,
+            "source":          exchange_rates.get("source", ""),
+        },
+        "fob_dispatch": {
+            "description":     "수입상 마진 프리셋 기반 FOB 역산 결과 (참고값 — LLM이 재산정)",
+            "vat_pct":         vat_pct,
+            "import_duty_pct": import_duty_pct,
+            "fta_rate":        "0% (한-칠레 FTA HS 3004·3006 적용 시)",
+            "scenarios":       dispatch_scenarios,
+        },
+        "competitor_prices":   extracted.get("competitor_prices", []),
+        "pricing_db_data":     pricing_ctx or "cl_pricing DB 데이터 없음 (크롤러 미실행 또는 해당 품목 미등재)",
+    }
+    return _json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _normalize_p2_result(llm: dict, market: str, ref_price_clp: float, usd_clp: float) -> dict:
+    """새 9-블록 LLM 스키마 → 기존 파이프라인(server.py/report_generator.py) 기대 형식으로 변환."""
+
+    # ── scenarios: dict(aggressive/average/conservative) → list([저가진입,기준가,프리미엄]) ──
+    sc_raw = llm.get("scenarios", {})
+    if isinstance(sc_raw, dict):
+        def _sc_entry(key: str, name_ko: str) -> dict:
+            sc = sc_raw.get(key, {})
+            fob_usd = float(sc.get("fob_usd", 0) or 0)
+            fob_clp = float(sc.get("fob_clp", 0) or 0)
+            if not fob_clp and fob_usd and usd_clp:
+                fob_clp = round(fob_usd * usd_clp)
+            return {
+                "name":      name_ko,
+                "price_usd": fob_usd,
+                "price_clp": fob_clp,
+                "reason":    sc.get("reason", ""),
+                "formula":   sc.get("formula", ""),
+                "market":    market,
+            }
+        scenarios_list = [
+            _sc_entry("aggressive",   "저가진입"),
+            _sc_entry("average",      "기준가"),
+            _sc_entry("conservative", "프리미엄"),
+        ]
+    elif isinstance(sc_raw, list):
+        # 구버전 flat 배열 폴백
+        scenarios_list = sc_raw
+    else:
+        scenarios_list = []
+
+    # ── 기준가: scenarios 중간값(average) 또는 llm 직접값 ─────────────────────
+    avg_sc    = next((s for s in scenarios_list if s.get("name") == "기준가"), {})
+    final_usd = float(llm.get("final_price_usd", 0) or avg_sc.get("price_usd", 0) or 0)
+    final_clp = float(llm.get("final_price_clp", 0) or avg_sc.get("price_clp", 0) or 0)
+    ref_clp   = float(llm.get("ref_price_clp",   0) or ref_price_clp or 0)
+
+    # ── 보고서 텍스트 블록들 ──────────────────────────────────────────────────
+    block_macro   = str(llm.get("block_market_macro", "") or "")
+    block_extract = str(llm.get("block_extract",      "") or "")
+    block_fob     = str(llm.get("block_fob_intro",    "") or "")
+    block_strat   = str(llm.get("block_strategy",     "") or "")
+    block_risks   = str(llm.get("block_risks",        "") or "")
+
+    # rationale: block들에서 조합 또는 직접값
+    rationale = str(llm.get("rationale", "") or "")
+    if not rationale:
+        parts = [p for p in [block_extract, block_fob, block_strat] if p]
+        rationale = " ".join(parts[:2])[:500] or "AI 분석 결과"
+
+    return {
+        # 기존 파이프라인 필드
+        "final_price_clp":  final_clp,
+        "final_price_usd":  final_usd,
+        "rationale":        rationale,
+        "ref_price_clp":    ref_clp,
+        "scenarios":        scenarios_list,
+        # 보고서 텍스트 블록 (report_generator §1·§2 보강용)
+        "block_market_macro":   block_macro,
+        "block_extract":        block_extract,
+        "block_fob_intro":      block_fob,
+        "block_strategy":       block_strat,
+        "block_risks":          block_risks,
+        "block_scenario_penetration": str(llm.get("block_scenario_penetration", "") or ""),
+        "block_scenario_reference":   str(llm.get("block_scenario_reference",   "") or ""),
+        "block_scenario_premium":     str(llm.get("block_scenario_premium",     "") or ""),
+        "block_disclaimer":           str(llm.get("block_disclaimer",           "") or ""),
+        # 원본 LLM 출력 보존 (디버그)
+        "_llm_raw": llm,
+    }
+
 
 async def _analyze_market_haiku(
     client: Any,
@@ -1020,97 +1238,76 @@ async def _analyze_market_haiku(
     market: str,
     pricing_ctx: str = "",
 ) -> dict:
-    """Claude Haiku로 특정 시장(public/private) 가격 전략 분석."""
-    import json, re as _re, asyncio as _asyncio
+    """Claude Haiku — 시스템 프롬프트 + JSON 데이터 방식으로 P2 가격 전략 분석."""
+    import json as _json, re as _re, asyncio as _asyncio
 
-    usd_clp = exchange_rates["usd_clp"]
-    usd_krw = exchange_rates["usd_krw"]
-    ref_price_clp = extracted.get("ref_price_clp") or 0
-    ref_price_usd = extracted.get("ref_price_usd") or 0
+    usd_clp       = float(exchange_rates.get("usd_clp", 932.0))
+    ref_price_clp = float(extracted.get("ref_price_clp") or 0)
+    ref_price_usd = float(extracted.get("ref_price_usd") or 0)
     if not ref_price_clp and ref_price_usd:
         ref_price_clp = round(ref_price_usd * usd_clp, 0)
-    ref_display = f"CLP {float(ref_price_clp):,.0f}" if ref_price_clp else (extracted.get("ref_price_text") or "미확인")
 
-    if market == "public":
-        market_label = "공공 시장 (Mercado Público · CENABAST 공급 채널)"
-        channel_note = (
-            "공공: CLP 낙찰가 → IVA 없음(기관 면제) → 관세6%(FTA0%) → 파트너마진10-15% → FOB USD\n"
-            "저가진입: FOB비율 28%, 기준가: 35%, 프리미엄: 42%"
-        )
-    else:
-        market_label = "민간 시장 (Cruz Verde / Salcobrand / Farmacias Ahumada 채널)"
-        channel_note = (
-            "민간: CLP 소매가 ÷ 1.19(IVA) → 약국마진25-35% → 파트너마진15-25% → 관세6% → FOB USD\n"
-            "저가진입: FOB비율 25%, 기준가: 31%, 프리미엄: 38%"
-        )
-
-    prompt = f"""칠레 제약 시장 수출 가격 전략을 수립해주세요.
-
-## 추출된 보고서 정보
-- 제품명: {extracted.get('product_name', '미상')}
-- 소매 참조가 (CLP): {ref_display}
-- 참조가 원문: {extracted.get('ref_price_text', '없음')}
-- 시장: {market_label}
-- 환율: 1 USD = {usd_clp:.2f} CLP / {usd_krw:.2f} KRW
-- 경쟁사: {json.dumps(extracted.get('competitor_prices', []), ensure_ascii=False)}
-- 시장 맥락: {extracted.get('market_context', '')}
-
-## 역산 방식
-{channel_note}
-
-## 요청
-3개 시나리오의 FOB USD 역산가를 산정하세요. 반드시 아래 JSON만 출력:
-{{
-  "final_price_clp": 숫자,
-  "final_price_usd": 숫자,
-  "rationale": "산정 근거 3문장",
-  "ref_price_clp": 숫자,
-  "scenarios": [
-    {{"name": "저가진입", "price_clp": 숫자, "price_usd": 숫자,
-      "reason": "저마진 포지셔닝 정의·근거 한 문단", "formula": "역산식"}},
-    {{"name": "기준가",   "price_clp": 숫자, "price_usd": 숫자,
-      "reason": "기준 포지셔닝 한 문단", "formula": "역산식"}},
-    {{"name": "프리미엄", "price_clp": 숫자, "price_usd": 숫자,
-      "reason": "프리미엄 포지셔닝 한 문단", "formula": "역산식"}}
-  ]
-}}
-
-CLP 참조가 미확인 시 칠레 시장 데이터 기반 합리적 추정값을 사용하세요.
-
-{f"## DB 크롤 실제 가격 데이터 (Cruz Verde / Salcobrand / CENABAST 등 실측){chr(10)}{pricing_ctx}{chr(10)}위 실측 데이터를 가격 산정의 최우선 근거로 사용하세요. 실측값이 있으면 추정값 대신 반드시 활용하세요." if pricing_ctx else ""}"""
+    user_msg = _build_p2_user_message(extracted, exchange_rates, market, pricing_ctx)
 
     try:
         resp = await _asyncio.to_thread(
             lambda: client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=1536,
-                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                system=_CLAUDE_P2_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
             )
         )
-        raw = resp.content[0].text
+        raw = resp.content[0].text.strip()
+        # 코드블록 래퍼 제거
+        raw = _re.sub(r"```(?:json)?\s*", "", raw).strip("`").strip()
         m = _re.search(r"\{.*\}", raw, _re.S)
         if m:
-            return json.loads(m.group(0))
+            llm = _json.loads(m.group(0))
+            return _normalize_p2_result(llm, market, ref_price_clp, usd_clp)
     except Exception:
         pass
 
-    # 폴백
-    base_clp = ref_price_clp or 5000
-    ratio = 0.35 if market == "public" else 0.31
-    est_usd  = round(base_clp / usd_clp * ratio, 2) if usd_clp else 0
+    # ── 폴백 ────────────────────────────────────────────────────────────────
+    base_clp = ref_price_clp or 5000.0
+    ratio    = 0.35 if market == "public" else 0.31
+    est_usd  = round(base_clp / usd_clp * ratio, 2) if usd_clp else 0.0
     est_clp  = round(base_clp * ratio, 0)
     return {
-        "final_price_clp": est_clp,
-        "final_price_usd": est_usd,
-        "rationale": "AI 응답 파싱 실패 — 기본 역산값입니다.",
-        "ref_price_clp": base_clp,
+        "final_price_clp":  est_clp,
+        "final_price_usd":  est_usd,
+        "rationale":        "AI 응답 파싱 실패 — 기본 역산값입니다.",
+        "ref_price_clp":    base_clp,
+        "block_market_macro": (
+            "칠레는 인구 약 1,926만 명의 남미 최대 의약품 수입국 중 하나로, "
+            "의약품 시장 규모는 약 USD 24.5억(2024)이며 수입 의존도 80%+입니다. "
+            "FONASA(공공) / ISAPRE(민간) 이중 구조로 운영됩니다."
+        ),
+        "block_strategy": (
+            "CENABAST 공공조달 입찰 또는 Cruz Verde·Salcobrand 3대 체인 파트너십 검토가 필요합니다."
+            if market == "public"
+            else "Cruz Verde·Salcobrand·Farmacias Ahumada 3대 약국 체인 유통 파트너십이 권장됩니다."
+        ),
+        "block_risks": (
+            "ISP 생물학적 동등성(BE) 요건 강화, CLP 환율 변동성, "
+            "인접국(아르헨티나 등) 로컬 제약사 가격 공세 리스크가 있습니다."
+        ),
+        "block_extract": "", "block_fob_intro": "",
+        "block_scenario_penetration": "", "block_scenario_reference": "",
+        "block_scenario_premium": "", "block_disclaimer": "",
         "scenarios": [
             {"name": "저가진입", "price_clp": round(est_clp * 0.88), "price_usd": round(est_usd * 0.88, 2),
-             "reason": "저마진 진입가", "formula": f"CLP {base_clp:,.0f} × {ratio*0.88:.2f} = USD {est_usd*0.88:.2f}"},
-            {"name": "기준가",   "price_clp": est_clp,              "price_usd": est_usd,
-             "reason": "기준가",   "formula": f"CLP {base_clp:,.0f} × {ratio:.2f} = USD {est_usd:.2f}"},
+             "reason": "저마진 진입가 — FTA 관세 혜택으로 수입상 마진 30% 가정.",
+             "formula": f"CLP {base_clp:,.0f} × {ratio*0.88:.2f} = USD {est_usd*0.88:.2f}",
+             "market": market},
+            {"name": "기준가",   "price_clp": est_clp,               "price_usd": est_usd,
+             "reason": "기준가 — 수입상 마진 20%, FTA 0% 관세 적용.",
+             "formula": f"CLP {base_clp:,.0f} × {ratio:.2f} = USD {est_usd:.2f}",
+             "market": market},
             {"name": "프리미엄", "price_clp": round(est_clp * 1.12), "price_usd": round(est_usd * 1.12, 2),
-             "reason": "프리미엄 포지셔닝", "formula": f"CLP {base_clp:,.0f} × {ratio*1.12:.2f} = USD {est_usd*1.12:.2f}"},
+             "reason": "프리미엄 포지셔닝 — 수입상 마진 10%, 개량신약 차별성 반영.",
+             "formula": f"CLP {base_clp:,.0f} × {ratio*1.12:.2f} = USD {est_usd*1.12:.2f}",
+             "market": market},
         ],
     }
 
@@ -1411,6 +1608,26 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
         norm_scenarios = pub_norm + priv_norm
 
         verdict_src = extracted.get("verdict", "미상")
+
+        # §1 거시 시장 요약 — LLM block_market_macro 우선, 없으면 기본값
+        _macro_text = (
+            pub_analysis.get("block_market_macro")
+            or priv_analysis.get("block_market_macro")
+            or (
+                "칠레는 인구 약 1,926만 명의 남미 최대 의약품 수입국 중 하나로, "
+                "의약품 시장 규모는 약 USD 24.5억(2024)이며 수입 의존도 80%+입니다. "
+                "공공(FONASA·CENABAST)과 민간(ISAPRE·Cruz Verde·Salcobrand·Farmacias Ahumada) "
+                "이중 구조로 운영되며 ISP(Instituto de Salud Pública)가 등록·허가를 담당합니다."
+            )
+        )
+
+        # §2 기준 단가 보강 — LLM block_extract
+        _extract_text = (
+            pub_analysis.get("block_extract")
+            or priv_analysis.get("block_extract")
+            or ""
+        )
+
         p2_data = {
             "product_name":    extracted.get("product_name", "미상"),
             "inn_label":       extracted.get("product_name", ""),
@@ -1429,12 +1646,28 @@ async def _run_p2_ai_pipeline(report_path: str, market: str) -> None:
             ],
             # §3 크롤 경쟁가 (Cruz Verde / Salcobrand / CENABAST 실측)
             "competitor_prices": _competitor_prices_p2,
-            # §1 칠레 거시 시장 요약
-            "market_summary": (
-                "칠레는 인구 약 1,926만 명의 남미 최대 의약품 수입국 중 하나로, "
-                "의약품 시장 규모는 약 USD 24.5억(2024)이며 수입 의존도 80%+입니다. "
-                "공공(FONASA·CENABAST)과 민간(ISAPRE·Cruz Verde·Salcobrand·Farmacias Ahumada) "
-                "이중 구조로 운영되며 ISP(Instituto de Salud Pública)가 등록·허가를 담당합니다."
+            # §1 칠레 거시 시장 요약 (LLM block_market_macro 우선)
+            "market_summary":   _macro_text,
+            # §2 기준 단가 보강 (LLM block_extract)
+            "extract_summary":  _extract_text,
+            # LLM 생성 전략·리스크 텍스트 블록 (보고서 §4 추가 서술용)
+            "block_strategy_public":  pub_analysis.get("block_strategy",  ""),
+            "block_strategy_private": priv_analysis.get("block_strategy", ""),
+            "block_risks":            (
+                pub_analysis.get("block_risks")
+                or priv_analysis.get("block_risks") or ""
+            ),
+            "block_scenario_penetration": (
+                pub_analysis.get("block_scenario_penetration")
+                or priv_analysis.get("block_scenario_penetration") or ""
+            ),
+            "block_scenario_reference": (
+                pub_analysis.get("block_scenario_reference")
+                or priv_analysis.get("block_scenario_reference") or ""
+            ),
+            "block_scenario_premium": (
+                pub_analysis.get("block_scenario_premium")
+                or priv_analysis.get("block_scenario_premium") or ""
             ),
             "public_data_src":  "Mercado Público 낙찰가, CENABAST Ley 21.198 공급가, DB 크롤 데이터",
             "private_data_src": "Cruz Verde · Salcobrand · Farmacias Ahumada 소매가, DB 크롤 데이터",
