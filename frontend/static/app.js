@@ -704,6 +704,7 @@ async function runP2AiPipeline() {
       body: JSON.stringify({ report_filename: reportFilename }),
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 404) throw new Error('시장조사 보고서 PDF를 찾을 수 없습니다. 먼저 1공정(시장 조사)을 다시 실행해 주세요.');
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     _p2AiPollTimer = setInterval(_pollP2AiPipeline, 1800);
   } catch (err) {

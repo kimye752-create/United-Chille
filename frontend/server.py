@@ -1732,11 +1732,14 @@ async def trigger_p2_pipeline(body: P2PipelineBody) -> JSONResponse:
 
     if body.report_filename:
         report_path = ROOT / "reports" / Path(body.report_filename).name
+        # 지정 파일이 없으면 최신 PDF로 자동 폴백
+        if not report_path.is_file():
+            report_path = _latest_report_pdf()
     else:
         report_path = _latest_report_pdf()
 
     if not report_path or not Path(report_path).is_file():
-        raise HTTPException(404, f"보고서 파일을 찾을 수 없습니다: {body.report_filename or '(최신 PDF 없음)'}")
+        raise HTTPException(404, "분석할 시장조사 보고서 PDF가 없습니다. 먼저 1공정(시장 조사)을 실행해 주세요.")
 
     _p2_ai_task = {
         "status":        "running",
