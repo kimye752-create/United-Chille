@@ -14,10 +14,11 @@ from typing import Any
 
 # ── 정적 폴백 (Supabase 미연결 또는 조회 실패 시) ─────────────────────────────
 _STATIC: dict[str, Any] = {
-    "gdp_usd_b":          330.3,       # USD 억 단위 (billion)
-    "population":         18_480_432,  # 명 (2024 센서스 실측치)
-    "pharma_market_usd_b": 2.45,       # USD 십억 (billion)
-    "pharma_import_pct":  80.4,        # % — 수입 의존도
+    "gdp_usd_b":           330.3,      # 총 GDP USD billion
+    "gdp_per_capita_usd":  17_220,     # 1인당 GDP USD (World Bank 2024)
+    "population":          18_480_432, # 명 (2024 센서스 실측치)
+    "pharma_market_usd_b":  2.45,      # USD 십억 (billion)
+    "pharma_import_pct":   80.4,       # % — 수입 의존도
     "source": {
         "gdp":          "World Bank 2024",
         "population":   "INE Chile · 2024 센서스",
@@ -28,7 +29,7 @@ _STATIC: dict[str, Any] = {
 
 # 하위 호환 — legacy list 형태 (일부 코드에서 직접 참조)
 _STATIC_MACRO: list[dict] = [
-    {"label": "국가 GDP",          "value": "USD 3,303억", "sub": "2024  ·  World Bank"},
+    {"label": "1인당 GDP",          "value": "US$ 17,220", "sub": "2024  ·  World Bank"},
     {"label": "인구",              "value": "1,848만 명",  "sub": "2024  ·  INE Chile 센서스"},
     {"label": "의약품 시장 규모",  "value": "USD 24.5억",  "sub": "2024  ·  IQVIA  ·  CAGR +6.2%"},
     {"label": "의약품 수입 의존도","value": "80.4%",        "sub": "2024  ·  CEPAL / Salud y Fármacos"},

@@ -40,6 +40,9 @@
 
 /** product_id → INN 표시명 (칠레 CL_ 품목) */
 const INN_MAP = {
+  CL_sereterol_activair:     'Fluticasone + Salmeterol',
+  CL_hydrine_hydroxyurea_500:'Hydroxyurea 500mg',
+  CL_gadvoa_gadobutrol_604:  'Gadobutrol 604mg',
   CL_cilostazol_cr_200:      'Cilostazol 200mg SR',
   CL_ciloduo_cilosta_rosuva: 'Cilostazol SR + Rosuvastatin',
   CL_rosumeg_combigel:       'Rosuvastatin + Omega-3',
@@ -106,18 +109,20 @@ function toggleProcess(id) {
 async function loadMacro() {
   // 폴백 정적값 (API 실패 시 즉시 표시)
   const _FB = {
-    gdp:    ['USD 3,303억', 'World Bank 2024'],
+    gdp:    ['US$ 17,220', 'World Bank 2024'],
     pop:    ['1,848만 명',  'INE Chile · 2024 센서스'],
     pharma: ['USD 24.5억', 'IQVIA / pharmatradz 2024'],
     import: ['80.4%',      'CEPAL · Salud y Fármacos 2024'],
   };
   const _apply = (d) => {
+    const gdpPc  = d?.gdp_per_capita_usd;
     const gdpB   = d?.gdp_usd_b;
     const popN   = d?.population;
     const phaB   = d?.pharma_market_usd_b;
     const impPct = d?.pharma_import_pct;
     _setMacro('macro-gdp',
-      gdpB   ? `USD ${(gdpB * 100).toLocaleString('ko-KR', {maximumFractionDigits:0})}억` : _FB.gdp[0],
+      gdpPc  ? `US$ ${Math.round(gdpPc).toLocaleString('ko-KR')}` :
+      gdpB   ? `US$ ${Math.round((gdpB * 1e9) / 18480432).toLocaleString('ko-KR')}` : _FB.gdp[0],
       'macro-gdp-src',    d?.source?.gdp    || _FB.gdp[1]);
     _setMacro('macro-pop',
       popN   ? `${Math.round(popN / 10000).toLocaleString('ko-KR')}만 명`                 : _FB.pop[0],
@@ -2221,6 +2226,9 @@ let _p3PdfName   = null;
 
 // P1 product_key → 표시 레이블 (P3 연동용, 칠레 CL_ 품목)
 const P3_PRODUCT_LABELS = {
+  CL_sereterol_activair:     'Sereterol Activair · Fluticasone + Salmeterol',
+  CL_hydrine_hydroxyurea_500:'Hydrine · Hydroxyurea 500mg',
+  CL_gadvoa_gadobutrol_604:  'Gadvoa Inj. · Gadobutrol 604mg',
   CL_cilostazol_cr_200:      'Cilostazol CR · 200mg SR (1일 1회)',
   CL_ciloduo_cilosta_rosuva: 'Ciloduo · Cilostazol + Rosuvastatin',
   CL_rosumeg_combigel:       'Rosumeg Combigel · Rosuvastatin + Omega-3',

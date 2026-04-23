@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/favicon.png"/>
   <link rel="apple-touch-icon" href="/static/favicon.png"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="/static/style.css?v=9"/>
+  <link rel="stylesheet" href="/static/style.css?v=10"/>
 </head>
 <body>
 <div class="app">
@@ -44,7 +44,7 @@
     <!-- 거시 지표 4카드 -->
     <div class="macro-grid">
       <div class="macro-card">
-        <div class="macro-label">국가 GDP</div>
+        <div class="macro-label">1인당 GDP</div>
         <div class="macro-value" id="macro-gdp">—</div>
         <div class="macro-source" id="macro-gdp-src">—</div>
       </div>
@@ -59,7 +59,7 @@
         <div class="macro-source" id="macro-pharma-src">—</div>
       </div>
       <div class="macro-card macro-card--import">
-        <div class="macro-label">의약품 수입 의존도</div>
+        <div class="macro-label">의약품 국가 수입 의존도</div>
         <div class="macro-value macro-value--import" id="macro-import">—</div>
         <div class="macro-source" id="macro-import-src">—</div>
       </div>
@@ -122,6 +122,9 @@
         <div class="inner-section">
           <div class="selector-row" style="gap:10px;">
             <select id="product-select" style="flex:1;">
+              <option value="CL_sereterol_activair">[일반제] Sereterol Activair · fluticasone+salmeterol</option>
+              <option value="CL_hydrine_hydroxyurea_500">[일반제] Hydrine · hydroxyurea 500mg</option>
+              <option value="CL_gadvoa_gadobutrol_604">[일반제] Gadvoa Inj. · gadobutrol 604mg</option>
               <option value="CL_cilostazol_cr_200">[개량신약] Cilostazol CR · cilostazol 200mg SR (1일 1회)</option>
               <option value="CL_ciloduo_cilosta_rosuva">[개량신약] Ciloduo · cilostazol SR + rosuvastatin 복합제</option>
               <option value="CL_rosumeg_combigel">[개량신약] Rosumeg Combigel · rosuvastatin+omega-3</option>
@@ -294,7 +297,7 @@
               <option value="">시장조사 보고서를 선택하세요.</option>
             </select>
             <button class="btn-analyze" id="btn-p3-run" onclick="runP3Pipeline()">
-              <span id="p3-run-icon">▶</span> 바이어 발굴 실행
+              <span id="p3-run-icon">▶</span> 바이어 발굴
             </button>
           </div>
           <!-- 하위 호환용 숨김 요소 -->
@@ -453,7 +456,7 @@
 </div><!-- /.app -->
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=11"></script>
 <script>
 /* ── 헤더 탭 전환 ── */
 function goHeaderTab(id, el) {
