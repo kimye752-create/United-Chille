@@ -883,9 +883,13 @@ async def generate_combined_report(body: CombinedReportBody) -> JSONResponse:
         from report_generator import render_cover_pdf
         import tempfile
 
-        p1_pdfs = sorted(reports_dir.glob("cl_report_*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-        p2_pdfs = sorted(reports_dir.glob("cl_p2_*.pdf"),     key=lambda p: p.stat().st_mtime, reverse=True)
-        p3_pdfs = sorted(reports_dir.glob("cl_p3_*.pdf"),     key=lambda p: p.stat().st_mtime, reverse=True)
+        p1_pdfs = sorted(reports_dir.glob("cl_report_*.pdf"),  key=lambda p: p.stat().st_mtime, reverse=True)
+        p2_pdfs = sorted(reports_dir.glob("cl_p2_*.pdf"),      key=lambda p: p.stat().st_mtime, reverse=True)
+        # 바이어 발굴 파이프라인은 cl_buyers_*.pdf 로 저장 (cl_p3_ 아님)
+        p3_pdfs = sorted(
+            list(reports_dir.glob("cl_buyers_*.pdf")) + list(reports_dir.glob("cl_p3_*.pdf")),
+            key=lambda p: p.stat().st_mtime, reverse=True,
+        )
 
         writer = PdfWriter()
 

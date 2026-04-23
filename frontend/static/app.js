@@ -2341,10 +2341,27 @@ async function _pollP3() {
       _p3Buyers  = result.buyers || [];
       _p3PdfName = result.pdf || null;
       _renderP3Cards(_p3Buyers);
+
+      // 결과 섹션 표시
       document.getElementById('p3-result-section').style.display = '';
-      // 상단 고정 최종 보고서 버튼 활성화
-      const dlBtnTop = document.getElementById('btn-p3-final-dl');
-      if (dlBtnTop && _p3PdfName) dlBtnTop.disabled = false;
+
+      // 기업 평가 기준 체크박스 표시
+      const criteriaBox = document.getElementById('p3-criteria-box');
+      if (criteriaBox) criteriaBox.style.display = '';
+
+      // Top 10 타이틀 표시
+      const cardsTitle = document.getElementById('p3-cards-title');
+      if (cardsTitle) cardsTitle.style.display = '';
+
+      // 통합 보고서 다운로드 버튼 표시
+      const reportBar = document.getElementById('p3-report-bar');
+      if (reportBar) reportBar.style.display = '';
+      const dlBtn = document.getElementById('btn-final-report');
+      if (dlBtn) dlBtn.disabled = false;
+
+      // 로딩 스피너 숨김
+      const loadEl = document.getElementById('p3-loading-state');
+      if (loadEl) loadEl.style.display = 'none';
 
       const btn  = document.getElementById('btn-p3-run');
       const icon = document.getElementById('p3-run-icon');
@@ -2553,6 +2570,47 @@ function downloadBuyerReport() {
     ? `/api/buyers/report/download?name=${encodeURIComponent(_p3PdfName)}`
     : '/api/buyers/report/download';
   window.open(url, '_blank');
+}
+
+/** 통합 보고서 생성 (P1 + P2 + P3 합본) */
+async function generateCombinedReport() {
+  const btn = document.getElementById('btn-final-report');
+  if (btn) { btn.disabled = true; btn.textContent = '생성 중…'; }
+
+  // 현재 선택된 제품명 파악
+  const productSelect = document.getElementById('product-select');
+  const productKey    = productSelect?.value || '';
+  const productOption = productSelect?.options[productSelect?.selectedIndex];
+  const productLabel  = productOption?.text || '제품명 미상';
+  // "[일반제] Sereterol Activair · fluticasone+salmeterol" → "Sereterol Activair"
+  const productName   = productLabel.replace(/^\[[^\]]+\]\s*/, '').split('·')[0].trim() || productLabel;
+
+  try {
+    const res = await fetch('/api/cl/report/combined', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_name:    productName,
+        inn_label:       '',
+        country:         '칠레',
+        use_latest_pdfs: true,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.pdf) throw new Error(data.detail || `HTTP ${res.status}`);
+
+    // 생성된 PDF 다운로드
+    const dlUrl = `/api/report/download?name=${encodeURIComponent(data.pdf)}`;
+    window.open(dlUrl, '_blank');
+
+    // 보고서 탭에 등록
+    _addReportEntry({ product: productName, verdict: '통합보고서' }, data.pdf);
+
+    if (btn) { btn.disabled = false; btn.textContent = '↓ 통합 보고서 다운로드'; }
+  } catch (err) {
+    alert(`통합 보고서 생성 실패: ${err.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = '↓ 통합 보고서 다운로드'; }
+  }
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
