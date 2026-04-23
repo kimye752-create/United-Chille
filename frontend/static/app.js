@@ -109,9 +109,9 @@ async function loadMacro() {
   // 폴백 정적값 (API 실패 시 즉시 표시)
   const _FB = {
     gdp:    ['US$ 17,220', 'World Bank 2024'],
-    pop:    ['1,848만 명',  'INE Chile · 2024 센서스'],
-    pharma: ['USD 24.5억', 'IQVIA / pharmatradz 2024'],
-    import: ['80.4%',      'CEPAL · Salud y Fármacos 2024'],
+    pop:    ['1,848만 명',  'INE Chile'],
+    pharma: ['$2.5B',      'IQVIA 2024'],
+    import: ['80.4%',      'CEPAL 2024'],
   };
   const _apply = (d) => {
     const gdpPc  = d?.gdp_per_capita_usd;
@@ -127,7 +127,7 @@ async function loadMacro() {
       popN   ? `${Math.round(popN / 10000).toLocaleString('ko-KR')}만 명`                 : _FB.pop[0],
       'macro-pop-src',    d?.source?.population || _FB.pop[1]);
     _setMacro('macro-pharma',
-      phaB   ? `USD ${phaB.toFixed(2)}B`                                                  : _FB.pharma[0],
+      phaB   ? `$${phaB.toFixed(1)}B`                                                     : _FB.pharma[0],
       'macro-pharma-src', d?.source?.pharma_market || _FB.pharma[1]);
     _setMacro('macro-import',
       impPct != null ? `${impPct}%`                                                        : _FB.import[0],
@@ -2193,19 +2193,9 @@ async function loadNews() {
     }
 
     listEl.innerHTML = data.items.map(item => {
-      const href    = item.link ? `href="${_escHtml(item.link)}" target="_blank" rel="noopener"` : '';
-      const tag     = item.link ? 'a' : 'div';
-      const meta    = [item.source, item.date].filter(Boolean).join(' · ');
-      const yr      = (item.date || '').slice(0, 4);
-      const yrBadge = yr ? `<span class="news-yr-badge ${yr >= '2026' ? 'news-yr-badge--new' : ''}">${yr}</span>` : '';
-      const summary = item.summary
-        ? `<div class="news-summary">${_escHtml(item.summary)}</div>` : '';
-      return `
-        <${tag} class="irow news-item" ${href} style="${item.link ? 'text-decoration:none;display:block;' : ''}">
-          <div class="news-title-row">${yrBadge}<span class="tit">${_escHtml(item.title)}</span></div>
-          ${summary}
-          ${meta ? `<div class="sub">${_escHtml(meta)}</div>` : ''}
-        </${tag}>`;
+      const href = item.link ? `href="${_escHtml(item.link)}" target="_blank" rel="noopener"` : '';
+      const tag  = item.link ? 'a' : 'div';
+      return `<${tag} class="irow news-item" ${href} style="${item.link ? 'text-decoration:none;display:block;' : ''}"><span class="tit">${_escHtml(item.title)}</span></${tag}>`;
     }).join('');
   } catch (e) {
     listEl.innerHTML = '<div class="irow" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">뉴스 조회 실패 — 잠시 후 다시 시도해 주세요</div>';

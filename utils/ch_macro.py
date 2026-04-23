@@ -21,9 +21,9 @@ _STATIC: dict[str, Any] = {
     "pharma_import_pct":   80.4,       # % — 수입 의존도
     "source": {
         "gdp":          "World Bank 2024",
-        "population":   "INE Chile · 2024 센서스",
-        "pharma_market":"IQVIA / pharmatradz 2024",
-        "pharma_import":"CEPAL · Salud y Fármacos 2024",
+        "population":   "INE Chile",
+        "pharma_market":"IQVIA 2024",
+        "pharma_import":"CEPAL 2024",
     },
 }
 

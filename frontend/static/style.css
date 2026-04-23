@@ -511,7 +511,16 @@ body {
 .irow .tit { font-size: 13px; font-weight: 800; color: var(--navy); margin-bottom: 3px; }
 .irow .sub { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
 .irow-row  { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-a.news-item:hover { background: rgba(23,63,120,.08); cursor: pointer; }
+/* 뉴스 아이템 — SG처럼 배경 없이 텍스트만 */
+.news-item {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 10px 4px !important;
+  border-bottom: 1px solid rgba(23,63,120,.07);
+  margin-bottom: 0 !important;
+}
+.news-item:last-child { border-bottom: none; }
+a.news-item:hover { background: transparent !important; cursor: pointer; }
 a.news-item:hover .tit { color: var(--navy2); }
 /* 뉴스 카드 개선 */
 .news-title-row   { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 3px; }
@@ -1633,13 +1642,9 @@ button[data-tooltip], .p2-seg-btn[data-tooltip] {
   font-size: 11px;
   color: var(--muted);
 }
-/* 의약품 수입 의존도 카드 — 경고 강조 */
-.macro-card--import {
-  border-left: 3px solid #e07b39;
-}
-.macro-value--import {
-  color: #c75c1a;
-}
+/* 의약품 수입 의존도 카드 — SG 통일 (강조 없음) */
+.macro-card--import {}
+.macro-value--import {}
 
 /* ══════════════════════════════════════════════════════════════════════════
    27. 세계지도 + 뉴스 그리드
