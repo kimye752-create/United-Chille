@@ -119,19 +119,19 @@ async function loadMacro() {
     const popN   = d?.population;
     const phaB   = d?.pharma_market_usd_b;
     const impPct = d?.pharma_import_pct;
-    _setMacro('macro-gdp',
+    _setMacro('psc-gdp',
       gdpPc  ? `US$ ${Math.round(gdpPc).toLocaleString('ko-KR')}` :
       gdpB   ? `US$ ${Math.round((gdpB * 1e9) / 18480432).toLocaleString('ko-KR')}` : _FB.gdp[0],
-      'macro-gdp-src',    d?.source?.gdp    || _FB.gdp[1]);
-    _setMacro('macro-pop',
-      popN   ? `${Math.round(popN / 10000).toLocaleString('ko-KR')}만 명`                 : _FB.pop[0],
-      'macro-pop-src',    d?.source?.population || _FB.pop[1]);
-    _setMacro('macro-pharma',
-      phaB   ? `$${phaB.toFixed(1)}B`                                                     : _FB.pharma[0],
-      'macro-pharma-src', d?.source?.pharma_market || _FB.pharma[1]);
-    _setMacro('macro-import',
-      impPct != null ? `${impPct}%`                                                        : _FB.import[0],
-      'macro-import-src', d?.source?.pharma_import || _FB.import[1]);
+      'psc-gdp-src',    d?.source?.gdp    || _FB.gdp[1]);
+    _setMacro('psc-pop',
+      popN   ? `${Math.round(popN / 10000).toLocaleString('ko-KR')}만 명`            : _FB.pop[0],
+      'psc-pop-src',    d?.source?.population || _FB.pop[1]);
+    _setMacro('psc-pharma',
+      phaB   ? `$${phaB.toFixed(1)}B`                                                : _FB.pharma[0],
+      'psc-pharma-src', d?.source?.pharma_market || _FB.pharma[1]);
+    _setMacro('psc-import',
+      impPct != null ? `${impPct}%`                                                   : _FB.import[0],
+      'psc-import-src', d?.source?.pharma_import || _FB.import[1]);
   };
 
   // 즉시 폴백 표시 후 API로 갱신
@@ -526,20 +526,31 @@ function switchP2Tab(tab) {
   if (_p2Tab === 'ai') _showP2AiError('');
 }
 
+function _showP2Loading(msg) {
+  const el    = document.getElementById('p2-loading-state');
+  const label = document.getElementById('p2-loading-label');
+  if (el) el.style.display = '';
+  if (label) label.textContent = msg || '가격 분석 중…';
+}
+function _hideP2Loading() {
+  const el = document.getElementById('p2-loading-state');
+  if (el) el.style.display = 'none';
+}
+
 function setP2AiSeg(seg) {
   _p2AiSeg = seg === 'private' ? 'private' : 'public';
   document.getElementById('p2-ai-seg-public')?.classList.toggle('on', _p2AiSeg === 'public');
   document.getElementById('p2-ai-seg-private')?.classList.toggle('on', _p2AiSeg === 'private');
 
-  const desc    = document.getElementById('p2-ai-seg-desc');
-  const warning = document.getElementById('p2-seg-warning');
-  const warnTxt = document.getElementById('p2-seg-warning-text');
-
+  const desc = document.getElementById('p2-ai-seg-desc');
   if (desc) {
     desc.textContent = _p2AiSeg === 'public'
-      ? 'Mercado Público / CENABAST 채널 · Ley 21.198 소매 상한가 기준 역산'
-      : 'Cruz Verde · Salcobrand · Farmacias Ahumada 소매 체인 · IVA 19% + 유통마진 기준 역산';
+      ? '공공 시장: Mercado Público / CENABAST 채널 · 공공 입찰 기준'
+      : '민간 시장: Cruz Verde · Salcobrand · Farmacias Ahumada 소매 체인 기준';
   }
+
+  const warning = document.getElementById('p2-seg-warning');
+  const warnTxt = document.getElementById('p2-seg-warning-text');
 
   // 공공/민간 비교 주의사항
   if (warning && warnTxt) {
@@ -681,7 +692,7 @@ async function runP2AiPipeline() {
   if (_p2AiPollTimer) clearInterval(_p2AiPollTimer);
   _resetP2AiResultView();
   _resetP2Progress();
-  _setP2Progress('extract', 'running');
+  _showP2Loading('공공 시장 분석 중…');
 
   if (runBtn) runBtn.disabled = true;
   if (runIcon) runIcon.textContent = '⏳';
@@ -696,7 +707,7 @@ async function runP2AiPipeline() {
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     _p2AiPollTimer = setInterval(_pollP2AiPipeline, 1800);
   } catch (err) {
-    _setP2Progress('extract', 'error');
+    _hideP2Loading();
     _showP2AiError(`실행 실패: ${err.message}`);
     if (runBtn) runBtn.disabled = false;
     if (runIcon) runIcon.textContent = '▶';
@@ -709,20 +720,12 @@ async function _pollP2AiPipeline() {
     const data = await res.json();
     if (data.status === 'idle') return;
 
-    // 서버 step → 프론트 진행 단계 매핑
-    const stepMap = {
-      extract:     () => _setP2Progress('extract',     'running'),
-      ai_extract:  () => { _setP2Progress('extract', 'done'); _setP2Progress('ai_extract', 'running'); },
-      exchange:    () => { _setP2Progress('ai_extract', 'done'); _setP2Progress('ai_analysis', 'running'); },
-      ai_analysis: () => { _setP2Progress('ai_extract', 'done'); _setP2Progress('ai_analysis', 'running'); },
-      report:      () => { _setP2Progress('ai_analysis', 'done'); _setP2Progress('report', 'running'); },
-    };
-    if (stepMap[data.step]) stepMap[data.step]();
+    if (data.step === 'report') _showP2Loading('보고서 생성 중…');
 
     if (data.status === 'done') {
       clearInterval(_p2AiPollTimer);
       _p2AiPollTimer = null;
-      for (const s of P2_STEP_ORDER) _setP2Progress(s, 'done');
+      _hideP2Loading();
       const rr = await fetch('/api/p2/pipeline/result');
       const result = await rr.json();
       _renderP2AiResult(result);
@@ -999,10 +1002,14 @@ function _renderP2ForSeg(seg) {
     if (refEl)     refEl.textContent   = refLabel;
     if (priceEl)   priceEl.textContent = priceUsd.toFixed(2);
     if (baseInput) baseInput.value     = priceUsd.toFixed(2);
+    const krwEl = document.getElementById('p2c-krw-' + col);
     if (subEl) {
-      const krw     = usdKrw > 0 ? Math.round(priceUsd * usdKrw).toLocaleString('ko-KR') : '—';
       const clpDisp = priceClp > 0 ? `CLP ${Math.round(priceClp).toLocaleString('ko-KR')}` : '—';
-      subEl.textContent = `${clpDisp} · ${krw} KRW`;
+      subEl.textContent = clpDisp;
+    }
+    if (krwEl) {
+      const krw = usdKrw > 0 ? `${Math.round(priceUsd * usdKrw).toLocaleString('ko-KR')} KRW` : '—';
+      krwEl.textContent = krw;
     }
     _p2ColData[col] = { opts: [] };
     renderP2ColOptions(col, false);
@@ -1268,12 +1275,14 @@ function recalcFobModal() {
   const col     = _fobModalState.tier;
   const priceEl = document.getElementById('p2c-price-' + col);
   const subEl   = document.getElementById('p2c-sub-' + col);
+  const krwEl   = document.getElementById('p2c-krw-' + col);
   if (priceEl) priceEl.textContent = resultUsd.toFixed(2);
-  if (subEl) {
-    const krw     = _fobModalState.usdKrw > 0
-      ? Math.round(resultUsd * _fobModalState.usdKrw).toLocaleString('ko-KR')
+  if (subEl)   subEl.textContent   = `CLP ${Math.round(resultClp).toLocaleString('ko-KR')}`;
+  if (krwEl) {
+    const krw = _fobModalState.usdKrw > 0
+      ? `${Math.round(resultUsd * _fobModalState.usdKrw).toLocaleString('ko-KR')} KRW`
       : '—';
-    subEl.textContent = `CLP ${Math.round(resultClp).toLocaleString('ko-KR')} · ${krw} KRW`;
+    krwEl.textContent = krw;
   }
 }
 
@@ -2144,15 +2153,19 @@ function _pbsLineFromApi(result) {
 
 /** 시장조사 진행 중 스피너 표시 */
 function _showP1Running(msg) {
-  const el = document.getElementById('p1-result-note');
-  if (!el) return;
-  el.innerHTML = `<span class="p1-spinner"></span>${msg || '시장조사 분석 중…'}`;
-  el.className   = 'p1-result-note running';
-  el.style.display = '';
+  // 새 loading-state 사용 (SG 통일)
+  const loadEl = document.getElementById('p1-loading-state');
+  if (loadEl) loadEl.style.display = '';
+  // 구 p1-result-note 숨김
+  const noteEl = document.getElementById('p1-result-note');
+  if (noteEl) noteEl.style.display = 'none';
 }
 
 /** 시장조사 완료/오류 노트 표시 */
 function _showP1Note(msg, isErr) {
+  // loading-state 숨김
+  const loadEl = document.getElementById('p1-loading-state');
+  if (loadEl) loadEl.style.display = 'none';
   const el = document.getElementById('p1-result-note');
   if (!el) return;
   el.textContent = msg;
@@ -2161,6 +2174,8 @@ function _showP1Note(msg, isErr) {
 }
 
 function _hideP1Note() {
+  const loadEl = document.getElementById('p1-loading-state');
+  if (loadEl) loadEl.style.display = 'none';
   const el = document.getElementById('p1-result-note');
   if (el) el.style.display = 'none';
 }
@@ -2180,35 +2195,37 @@ function _escHtml(s) {
    §11. 시장 신호 · 뉴스 (Perplexity)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-async function loadNews() {
-  const listEl = document.getElementById('news-list');
-  const btn    = document.getElementById('btn-news-refresh');
+async function loadPreviewNews() {
+  const listEl = document.getElementById('preview-news-list');
+  const btn    = document.getElementById('btn-preview-news-refresh');
   if (!listEl) return;
 
   if (btn) btn.disabled = true;
-  listEl.innerHTML = '<div class="irow" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">뉴스 로드 중…</div>';
+  listEl.innerHTML = '<div class="pvnews-item" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">뉴스 로드 중…</div>';
 
   try {
     const res  = await fetch('/api/cl/news');
     const data = await res.json();
 
     if (!data.ok || !data.items?.length) {
-      listEl.innerHTML = `<div class="irow" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">${data.error || '뉴스를 불러올 수 없습니다.'}</div>`;
+      listEl.innerHTML = `<div class="pvnews-item" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">${data.error || '뉴스를 불러올 수 없습니다.'}</div>`;
       return;
     }
 
     listEl.innerHTML = data.items.map(item => {
       const href = item.link ? `href="${_escHtml(item.link)}" target="_blank" rel="noopener"` : '';
       const tag  = item.link ? 'a' : 'div';
-      return `<${tag} class="irow news-item" ${href} style="${item.link ? 'text-decoration:none;display:block;' : ''}"><span class="tit">${_escHtml(item.title)}</span></${tag}>`;
+      return `<${tag} class="pvnews-item" ${href}><div class="pvnews-title">${_escHtml(item.title)}</div></${tag}>`;
     }).join('');
   } catch (e) {
-    listEl.innerHTML = '<div class="irow" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">뉴스 조회 실패 — 잠시 후 다시 시도해 주세요</div>';
+    listEl.innerHTML = '<div class="pvnews-item" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">뉴스 조회 실패 — 잠시 후 다시 시도해 주세요</div>';
     console.warn('뉴스 로드 실패:', e);
   } finally {
     if (btn) btn.disabled = false;
   }
 }
+/* 하위 호환 별칭 */
+const loadNews = loadPreviewNews;
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    §11. 3공정 — 바이어 발굴 (P3)
@@ -2618,4 +2635,4 @@ initP2Strategy();       // 수출 가격 전략 초기화
   if (p1Select) p1Select.addEventListener('change', _syncP3ProductLabel);
   _syncP3ProductLabel();
 })();
-loadNews();             // 칠레 시장 뉴스 즉시 로드
+loadPreviewNews();      // 칠레 시장 뉴스 즉시 로드
