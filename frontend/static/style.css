@@ -50,6 +50,8 @@
   --sh2:     0 2px 8px  rgba(23,63,120,.06);
   --sh3:     0 1px 4px  rgba(23,63,120,.04);
 
+  --topbar-h: 66px;
+
   /* 1공정 호환 변수 */
   --ok:      #2d9870;
   --ok-bg:   rgba(45,152,112,.10);
@@ -2770,7 +2772,7 @@ button[data-tooltip], .p2-seg-btn[data-tooltip] {
 .page.on { display: block; }
 
 /* preview section */
-.preview-page { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h) - 32px); gap: 14px; }
+.preview-page { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h) - 44px); gap: 14px; }
 .preview-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; flex-shrink: 0; }
 .preview-stat-card { background: var(--card); border-radius: 16px; box-shadow: var(--sh); padding: 16px 20px 14px; display: flex; flex-direction: column; justify-content: space-between; min-height: 88px; text-align: center; }
 .psc-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .02em; margin-bottom: 6px; }
@@ -2787,7 +2789,7 @@ a.pvnews-item:hover { background: rgba(23,63,120,.03); }
 .pvnews-title { font-size: 13.5px; font-weight: 700; color: var(--navy); line-height: 1.45; }
 
 /* dashboard-grid */
-.dashboard-grid { display: grid; grid-template-columns: 1fr 1.45fr; gap: 16px; align-items: stretch; height: calc(100vh - var(--topbar-h) - 32px); }
+.dashboard-grid { display: grid; grid-template-columns: 1fr 1.45fr; gap: 16px; align-items: stretch; height: calc(100vh - var(--topbar-h) - 44px); }
 .col-left, .col-right { background: var(--card); border-radius: 20px; box-shadow: var(--sh); overflow-x: hidden; overflow-y: auto; height: 100%; display: flex; flex-direction: column; }
 .col-left .process-section, .col-right .process-section { background: transparent; box-shadow: none; border-radius: 0; margin-bottom: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .col-left .process-body, .col-right .process-body { flex: 1; min-height: 0; overflow-y: auto; }
