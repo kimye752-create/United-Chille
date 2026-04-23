@@ -2839,3 +2839,37 @@ a.pvnews-item:hover { background: rgba(23,63,120,.03); }
   .col-left, .col-right { height: auto; max-height: none; }
   .preview-bottom-row { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   SG UI 통일 보완 (v14) — 버튼 짤림 / 필 토글 / 박스 클립 수정
+   ============================================================ */
+
+/* 1. selector-row: select 축소 허용 + btn 고정 */
+.selector-row select { min-width: 0; }
+.selector-row .btn-analyze { flex-shrink: 0; }
+.btn-analyze { flex-shrink: 0; }
+
+/* 2. col-left/col-right 내부 process-section overflow 해제 */
+.col-left .process-section,
+.col-right .process-section { overflow: visible; }
+
+/* 3. p2-seg-row/btn — SG 필 스타일 */
+.p2-seg-row {
+  display: flex; align-items: center;
+  background: rgba(23,63,120,.08); border-radius: 999px;
+  padding: 3px; gap: 0; margin-bottom: 12px;
+}
+.p2-seg-btn {
+  flex: 1; height: 30px; padding: 0 14px; border-radius: 999px;
+  background: transparent; color: var(--muted);
+  font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: background .2s, color .2s, box-shadow .2s;
+  font-family: inherit; border: none; white-space: nowrap;
+}
+.p2-seg-btn.on {
+  background: var(--navy); color: #fff;
+  box-shadow: 0 2px 8px rgba(23,63,120,.22);
+}
+
+/* 4. 메인 패딩 SG 동일 */
+.main { padding: 16px 28px 28px; max-width: 1440px; }
