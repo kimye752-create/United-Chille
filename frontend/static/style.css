@@ -1025,26 +1025,29 @@ select:focus { box-shadow: 0 0 0 3px rgba(23,63,120,.15); }
 
 /* ── 19. 1공정 — 신약 분석 폼 ───────────────────────────────────────────── */
 .custom-form {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-top: 4px;
-  align-items: center;
+}
+.custom-form .btn-analyze {
+  grid-column: 1 / -1; /* 버튼은 3칸 전체 너비 */
 }
 .custom-input {
-  flex: 1 1 160px;
+  width: 100%;
   padding: 10px 14px;
   border-radius: 10px;
+  border: 1.5px solid var(--border, #dde0e8);
   font-size: 13px;
-  background: var(--inner);
+  background: #fff;
   color: var(--text);
   outline: none;
-  transition: box-shadow .15s;
+  transition: border-color .15s, box-shadow .15s;
   min-width: 0;
   font-family: inherit;
-  box-shadow: var(--sh3);
+  box-sizing: border-box;
 }
-.custom-input:focus { box-shadow: 0 0 0 3px rgba(23,63,120,.15); }
+.custom-input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(23,63,120,.12); }
 .custom-input::placeholder { color: var(--muted); }
 
 /* ── 20. 보고서 탭 ───────────────────────────────────────────────────────── */

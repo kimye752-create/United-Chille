@@ -485,7 +485,7 @@ function toggleCustomForm() {
   var btn  = document.getElementById('btn-custom-toggle');
   if (!wrap) return;
   var open = wrap.style.display !== 'none';
-  wrap.style.display = open ? 'none' : 'block';
+  wrap.style.display = open ? 'none' : '';
   if (btn) btn.textContent = (open ? '▸' : '▾') + ' 신약 직접 분석';
 }
 
