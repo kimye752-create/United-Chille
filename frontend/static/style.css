@@ -1774,6 +1774,27 @@ button[data-tooltip], .p2-seg-btn[data-tooltip] {
   background: rgba(200,86,77,.08);
   color: var(--red);
 }
+.p1-result-note.running {
+  background: rgba(45,152,112,.06);
+  color: var(--navy);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.p1-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(23,63,120,.2);
+  border-top-color: var(--navy);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    29. P2 · 3열 시나리오 카드

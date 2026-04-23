@@ -1711,22 +1711,22 @@ async function runPipeline() {
   const reBtn = document.getElementById('btn-reanalyze');
   if (reBtn) reBtn.style.display = 'none';
 
-  // B2: db_load 단계 먼저 활성화
-  setProgress('db_load', 'running');
+  // 스피너 표시
+  _showP1Running('시장조사 분석 중…');
 
   try {
     const res = await fetch(`/api/pipeline/${encodeURIComponent(productKey)}`, { method: 'POST' });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
       console.error('파이프라인 오류:', d.detail || res.status);
-      setProgress('db_load', 'error');
+      _showP1Note('오류가 발생했습니다. 다시 시도해 주세요.', true);
       _resetBtn();
       return;
     }
     _pollTimer = setInterval(() => pollPipeline(productKey), 2500);
   } catch (e) {
     console.error('요청 실패:', e);
-    setProgress('db_load', 'error');
+    _showP1Note('서버 연결에 실패했습니다. 다시 시도해 주세요.', true);
     _resetBtn();
   }
 }
@@ -1747,18 +1747,14 @@ async function pollPipeline(productKey) {
 
     if (d.status === 'idle') return;
 
-    // B2: 서버 step → 프론트 STEP_ORDER 매핑
-    if      (d.step === 'db_load')  { setProgress('db_load',  'running'); }
-    else if (d.step === 'analyze')  { setProgress('db_load',  'done'); setProgress('analyze', 'running'); }
-    else if (d.step === 'refs')     { setProgress('analyze',  'done'); setProgress('refs',    'running'); }
-    else if (d.step === 'report')   {
-      setProgress('refs', 'done'); setProgress('report', 'running');
+    // 스피너 유지 (단계 표시 없음)
+    if (d.step === 'report') {
       _showReportLoading();
     }
 
     if (d.status === 'done') {
       clearInterval(_pollTimer);
-      for (const s of STEP_ORDER) setProgress(s, 'done');
+      _hideP1Note();
       const r2   = await fetch(`/api/pipeline/${encodeURIComponent(productKey)}/result`);
       const data = await r2.json();
       renderResult(data.result, data.refs, data.pdf);
@@ -1767,7 +1763,7 @@ async function pollPipeline(productKey) {
 
     if (d.status === 'error') {
       clearInterval(_pollTimer);
-      setProgress(STEP_ORDER.includes(d.step) ? d.step : 'analyze', 'error');
+      _showP1Note('분석 중 오류가 발생했습니다. 다시 시도해 주세요.', true);
       _resetBtn();
     }
   } catch (_) { /* 조용히 재시도 */ }
@@ -2144,6 +2140,15 @@ function _pbsLineFromApi(result) {
   const haiku = String(result.pbs_haiku_estimate || result.price_positioning_pbs || '').trim();
   if (haiku) return haiku;
   return '참고 가격 정보 없음';
+}
+
+/** 시장조사 진행 중 스피너 표시 */
+function _showP1Running(msg) {
+  const el = document.getElementById('p1-result-note');
+  if (!el) return;
+  el.innerHTML = `<span class="p1-spinner"></span>${msg || '시장조사 분석 중…'}`;
+  el.className   = 'p1-result-note running';
+  el.style.display = '';
 }
 
 /** 시장조사 완료/오류 노트 표시 */
