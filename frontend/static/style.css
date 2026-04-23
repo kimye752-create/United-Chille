@@ -2165,7 +2165,7 @@ button[data-tooltip], .p2-seg-btn[data-tooltip] {
 /* 평가 항목 체크박스 그리드 */
 .p3-criteria-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px 12px;
   margin-top: 8px;
 }

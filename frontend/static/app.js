@@ -2606,10 +2606,10 @@ async function generateCombinedReport() {
     // 보고서 탭에 등록
     _addReportEntry({ product: productName, verdict: '통합보고서' }, data.pdf);
 
-    if (btn) { btn.disabled = false; btn.textContent = '↓ 통합 보고서 다운로드'; }
+    if (btn) { btn.disabled = false; btn.textContent = '↓ 최종 보고서 다운로드'; }
   } catch (err) {
     alert(`통합 보고서 생성 실패: ${err.message}`);
-    if (btn) { btn.disabled = false; btn.textContent = '↓ 통합 보고서 다운로드'; }
+    if (btn) { btn.disabled = false; btn.textContent = '↓ 최종 보고서 다운로드'; }
   }
 }
 
